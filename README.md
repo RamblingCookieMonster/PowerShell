@@ -5,10 +5,10 @@ Various PowerShell functions and scripts
 
 # Instructions
 
-Most of these files contain functions.  For example, Invoke-Sqlcmd2.ps1 contains the Invoke-Sqlcmd2 function.
+These files contain functions.  For example, Invoke-Sqlcmd2.ps1 contains the Invoke-Sqlcmd2 function.
 
     #Download and unblock the file(s).
-    #Dot source the files as appropriate.
+    #Dot source the file(s) as appropriate.
     . "\\Path\To\Invoke-Sqlcmd2"
     
     #Use the functions
@@ -25,15 +25,15 @@ I'm a fan of Invoke-Sqlcmd2.  Props to Chad Miller and the other contributors fo
   * ![Use PSCredential](/Images/ISCCreds.png)
 * Added PSObject output type to allow comparisons without odd [System.DBNull]::Value behavior:
   * Previously, many PowerShell comparisons resulted in errors:
-   * ![GT Comparison Errors](/Images/ISCCompareGT.png)
+    * ![GT Comparison Errors](/Images/ISCCompareGT.png)
   * With PSObject output, comparisons behave as expected:
-   * ![GT Comparison Fix](/Images/ISCCompareGTFix.png)
+    * ![GT Comparison Fix](/Images/ISCCompareGTFix.png)
   * Previously, testing for nonnull / null values did not work as expected:
-   * ![NotNull Fails](/Images/ISCCompareNotNull.png)
+    * ![NotNull Fails](/Images/ISCCompareNotNull.png)
   * With PSObject output, null values are excluded as expected
-   * ![NotNull Fails Fix](/Images/ISCCompareNotNullFix.png)
+    * ![NotNull Fails Fix](/Images/ISCCompareNotNullFix.png)
   * Speed comparison between DataRow and PSObject output with 1854 rows, 84 columns:
-   * ![Speed PSObject v Datarow](/Images/ISCPSObjectVsDatarow.png)
+    * ![Speed PSObject v Datarow](/Images/ISCPSObjectVsDatarow.png)
 
 #### That DBNull behavior is strange!  Why doesn't it behave as expected?
 
