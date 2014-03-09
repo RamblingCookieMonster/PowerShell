@@ -34,7 +34,7 @@ I'm a fan of Invoke-Sqlcmd2.  Props to Chad Miller and the other contributors fo
 
 #### That DBNull behavior is strange!  Why doesn't it behave as expected?
 
-I agree.  PowerShell does a lot of the work under the covers to provide behavior a non-developer might expect.  From my perspective, PowerShell should handle [System.DBNull]::Value like it does Null.  Please vote up [this Microsoft Connect suggestion](https://connect.microsoft.com/PowerShell/feedback/details/830412/provide-expected-comparison-handling-for-dbnull) if you agree!
+I agree.  PowerShell does a lot of work under the covers to provide behavior a non-developer might expect.  From my perspective, PowerShell should handle [System.DBNull]::Value like it does Null.  Please vote up [this Microsoft Connect suggestion](https://connect.microsoft.com/PowerShell/feedback/details/830412/provide-expected-comparison-handling-for-dbnull) if you agree!
 
 Major thanks to [Dave Wyatt](http://powershell.org/wp/forums/topic/dealing-with-dbnull/) for providing the C# code that produces the PSObject output type as a workaround for this.
 
