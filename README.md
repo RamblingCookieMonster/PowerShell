@@ -12,6 +12,7 @@ Most of these files contain functions.  For example, Invoke-Sqlcmd2.ps1 contains
     . "\\Path\To\Invoke-Sqlcmd2"
     
     #Use the functions
+    Get-Help Invoke-Sqlcmd2 -Full
     Invoke-Sqlcmd2 -ServerInstance MyServer\MyInstance -Query "SELECT ServerName, VCNumCPU FROM tblServerInfo" -As PSObject -Credential $cred | ?{$_.VCNumCPU -gt 8}
     
 # Help!

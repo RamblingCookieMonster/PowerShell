@@ -45,6 +45,9 @@
 
         PSObject output introduces overhead but adds flexibility for working with results: http://powershell.org/wp/forums/topic/dealing-with-dbnull/
 
+    .PARAMETER AppendServerInstance
+        If specified, append the server instance to PSObject and DataRow output
+
     .INPUTS 
         None 
             You cannot pipe objects to Invoke-Sqlcmd2 
@@ -77,6 +80,28 @@
 
         This example uses the PSObject output type to allow more flexibility when working with results.  Using a datarow would result in errors for the first example, and would include rows where VCNumCPU has DBNull value.
 
+    .EXAMPLE
+        'Instance1', 'Server1/Instance1', 'Server2' | Invoke-Sqlcmd2 -query "Sp_databases" -as psobject -AppendServerInstance
+
+        This example lists databases for each instance.  It includes a column for the ServerInstance in question.
+            DATABASE_NAME          DATABASE_SIZE REMARKS        ServerInstance                                                     
+            -------------          ------------- -------        --------------                                                     
+            REDACTED                       88320                Instance1                                                      
+            master                         17920                Instance1                                                      
+            msdb                          161472                Instance1                                                      
+            REDACTED                      158720                Instance1                                                      
+            tempdb                          8704                Instance1                                                      
+            REDACTED                       92416                Server1/Instance1                                                        
+            master                          7744                Server1/Instance1                                                        
+            msdb                          618112                Server1/Instance1                                                        
+            REDACTED                    10004608                Server1/Instance1                                                        
+            REDACTED                      153600                Server1/Instance1                                                        
+            tempdb                        563200                Server1/Instance1                                                        
+            master                          5120                Server2                                                            
+            msdb                          215552                Server2                                                            
+            OperationsManager           20480000                Server2                                                            
+            tempdb                          8704                Server2  
+
     .NOTES 
         Version History 
         poshcode.org - http://poshcode.org/4967
@@ -92,6 +117,7 @@
                  
         github.com - https://github.com/RamblingCookieMonster/PowerShell
         v1.5.3 - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
+                 RamblingCookieMonster - Added AppendServerInstance switch.
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
@@ -152,7 +178,9 @@
         [string]$As="DataRow",
     
         [Parameter(Position=8, Mandatory=$false)]
-        [System.Collections.IDictionary]$SqlParameters
+        [System.Collections.IDictionary]$SqlParameters,
+
+        [switch]$AppendServerInstance
     ) 
 
     Begin
@@ -210,7 +238,6 @@
                 }
             }
         }
-
 
         $conn = New-Object System.Data.SqlClient.SQLConnection
 
@@ -274,6 +301,18 @@
     
             [void]$da.fill($ds) 
             $conn.Close() 
+
+            if($AppendServerInstance)
+            {
+                #Basics from Chad Miller
+                $Column =  new-object Data.DataColumn
+                $Column.ColumnName = "ServerInstance"
+                $ds.Tables[0].Columns.Add($Column)
+                Foreach($row in $ds.Tables[0])
+                {
+                    $row.ServerInstance = $SQLInstance
+                }
+            }
 
             switch ($As) 
             { 
