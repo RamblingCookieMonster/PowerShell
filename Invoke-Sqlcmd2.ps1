@@ -105,19 +105,19 @@
     .NOTES 
         Version History 
         poshcode.org - http://poshcode.org/4967
-        v1.0   - Chad Miller - Initial release 
-        v1.1   - Chad Miller - Fixed Issue with connection closing 
-        v1.2   - Chad Miller - Added inputfile, SQL auth support, connectiontimeout and output message handling. Updated help documentation 
-        v1.3   - Chad Miller - Added As parameter to control DataSet, DataTable or array of DataRow Output type 
-        v1.4   - Justin Dearing <zippy1981 _at_ gmail.com> - Added the ability to pass parameters to the query.
-        v1.4.1 - Paul Bryson <atamido _at_ gmail.com> - Added fix to check for null values in parameterized queries and replace with [DBNull]
-        v1.5   - Joel Bennett - add SingleValue output option
-        v1.5.1 - RamblingCookieMonster - Added ParameterSets, set Query and InputFile to mandatory
-        v1.5.2 - RamblingCookieMonster - Added DBNullToNull switch and code from Dave Wyatt. Added parameters to comment based help (need someone with SQL expertise to verify these)
+        v1.0         - Chad Miller - Initial release 
+        v1.1         - Chad Miller - Fixed Issue with connection closing 
+        v1.2         - Chad Miller - Added inputfile, SQL auth support, connectiontimeout and output message handling. Updated help documentation 
+        v1.3         - Chad Miller - Added As parameter to control DataSet, DataTable or array of DataRow Output type 
+        v1.4         - Justin Dearing <zippy1981 _at_ gmail.com> - Added the ability to pass parameters to the query.
+        v1.4.1       - Paul Bryson <atamido _at_ gmail.com> - Added fix to check for null values in parameterized queries and replace with [DBNull]
+        v1.5         - Joel Bennett - add SingleValue output option
+        v1.5.1       - RamblingCookieMonster - Added ParameterSets, set Query and InputFile to mandatory
+        v1.5.2       - RamblingCookieMonster - Added DBNullToNull switch and code from Dave Wyatt. Added parameters to comment based help (need someone with SQL expertise to verify these)
                  
-        github.com - https://github.com/RamblingCookieMonster/PowerShell
-        v1.5.3 - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
-                 RamblingCookieMonster - Added AppendServerInstance switch.
+        github.com   - https://github.com/RamblingCookieMonster/PowerShell
+        v1.5.3       - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
+                       RamblingCookieMonster - Added AppendServerInstance switch.
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
@@ -193,38 +193,39 @@
 
         Write-Verbose "Running Invoke-Sqlcmd2 with ParameterSet $($PSCmdlet.ParameterSetName).  Performing query '$Query'"
 
-        #This code scrubs DBNulls.  Props to Dave Wyatt
-        $cSharp = @'
-            using System;
-            using System.Data;
-            using System.Management.Automation;
-
-            public class DBNullScrubber
-            {
-                public static PSObject DataRowToPSObject(DataRow row)
-                {
-                    PSObject psObject = new PSObject();
-
-                    if (row != null && (row.RowState & DataRowState.Detached) != DataRowState.Detached)
-                    {
-                        foreach (DataColumn column in row.Table.Columns)
-                        {
-                            Object value = null;
-                            if (!row.IsNull(column))
-                            {
-                                value = row[column];
-                            }
-
-                            psObject.Properties.Add(new PSNoteProperty(column.ColumnName, value));
-                        }
-                    }
-
-                    return psObject;
-                }
-            }
-'@
         If($As -eq "PSObject")
         {
+            #This code scrubs DBNulls.  Props to Dave Wyatt
+            $cSharp = @'
+                using System;
+                using System.Data;
+                using System.Management.Automation;
+
+                public class DBNullScrubber
+                {
+                    public static PSObject DataRowToPSObject(DataRow row)
+                    {
+                        PSObject psObject = new PSObject();
+
+                        if (row != null && (row.RowState & DataRowState.Detached) != DataRowState.Detached)
+                        {
+                            foreach (DataColumn column in row.Table.Columns)
+                            {
+                                Object value = null;
+                                if (!row.IsNull(column))
+                                {
+                                    value = row[column];
+                                }
+
+                                psObject.Properties.Add(new PSNoteProperty(column.ColumnName, value));
+                            }
+                        }
+
+                        return psObject;
+                    }
+                }
+'@
+
             Try
             {
                 Add-Type -TypeDefinition $cSharp -ReferencedAssemblies 'System.Data','System.Xml' -ErrorAction stop
@@ -240,7 +241,6 @@
         }
 
         $conn = New-Object System.Data.SqlClient.SQLConnection
-
     }
     Process
     {
