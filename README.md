@@ -17,15 +17,34 @@ Most of these files contain functions.  For example, Invoke-Sqlcmd2.ps1 contains
     
 # Invoke-Sqlcmd2
 
-I'm a fan of Invoke-Sqlcmd2.  Props to Chad Miller and the other contributors for a fantastic function.
+I'm a fan of Invoke-Sqlcmd2.  Props to Chad Miller and the other contributors for a fantastic function.  I've added a few features with much help from others:
 
-### You clearly don't know SQL.  Why are you working on this function?
+* PSObject output type to allow comparisons without odd [System.DBNull]::Value behavior:
+  * Previously, many PowerShell comparisons resulted in errors:
+  * ![GT Comparison Errors](/Images/ISCCompareGT.png)
+  * With PSObject output, comparisons behave as expected:
+  * ![GT Comparison Fix](/Images/ISCCompateGTFix.png)
+  * Previously, testing for null values did not work:
+  * ![NotNull Fails](/Images/ISCCompareNotNull.png)
+  * With PSObject output, null values are excluded as expected
+  * ![NotNull Fails Fix](/Images/ISCCompareNotNullFix.png)
+* Added pipeline support, with the option to append a ServerInstance column to keep track of your results:
+  * ![NotNull Fails Fix](/Images/ISCAppendServerInstance.png)
+* Added the option to pass in a PSCredential instead of a plaintext password
+
+#### That DBNull behavior is strange!  Why doesn't it behave as expected?
+
+I agree.  PowerShell does a lot of the work under the covers to provide behavior a non-developer might expect.  From my perspective, PowerShell should handle [System.DBNull]::Value like it does Null.  Please vote up [this Microsoft Connect suggestion](https://connect.microsoft.com/PowerShell/feedback/details/830412/provide-expected-comparison-handling-for-dbnull) if you agree!
+
+Major thanks to [Dave Wyatt](http://powershell.org/wp/forums/topic/dealing-with-dbnull/) for providing the C# code that produces the PSObject output type as a workaround for this.
+
+#### You clearly don't know SQL.  Why are you working on this function?
 
 I absolutely do not know SQL.  If I'm doing something wrong please let me know!
 
 I have a number of projects at work that involve PowerShell wrappers for SQL queries.  Invoke-Sqlcmd2 has been my go-to command for this - now that I'm spending more time with it, I plan to add some functionality.
 
-### Why is Invoke-Sqlcmd2 here?
+#### Why is Invoke-Sqlcmd2 here?
 
 I copied the code here to avoid the automated tweets for Poshcode.org submissions.  I make many small changes and didn't want to spam twitter : )
 
