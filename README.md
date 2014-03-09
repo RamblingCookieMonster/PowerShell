@@ -20,8 +20,9 @@ Most of these files contain functions.  For example, Invoke-Sqlcmd2.ps1 contains
 I'm a fan of Invoke-Sqlcmd2.  Props to Chad Miller and the other contributors for a fantastic function.  I've added a few features with much help from others:
 
 * Added pipeline support, with the option to append a ServerInstance column to keep track of your results:
-  * ![NotNull Fails Fix](/Images/ISCAppendServerInstance.png)
+  * ![Add ServerInstance column](/Images/ISCAppendServerInstance.png)
 * Added the option to pass in a PSCredential instead of a plaintext password
+  * ![Use PSCredential](/Images/ISCCreds.png)
 * Added PSObject output type to allow comparisons without odd [System.DBNull]::Value behavior:
   * Previously, many PowerShell comparisons resulted in errors:
    * ![GT Comparison Errors](/Images/ISCCompareGT.png)
