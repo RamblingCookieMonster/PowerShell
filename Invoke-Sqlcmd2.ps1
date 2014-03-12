@@ -26,14 +26,6 @@
         Specifies A PSCredential for SQL Server Authentication connection to an instance of the Database Engine.  If -Credential is not specified, Invoke-Sqlcmd attempts a Windows Authentication connection using the Windows account running the PowerShell session.
         SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
 
-    .PARAMETER Username
-        Specifies the login ID for making a SQL Server Authentication connection to an instance of the Database Engine. The password must be specified using -Password. If -Username and -Password or -credential are not specified, Invoke-Sqlcmd attempts a Windows Authentication connection using the Windows account running the PowerShell session.
-        When possible, use Windows Authentication.
-
-    .PARAMETER Password
-        Specifies the password for the SQL Server Authentication login ID that was specified in -Username. Passwords are case-sensitive. When possible, use Windows Authentication. Do not use a blank password, when possible use a strong password. For more information, see "Strong Password" in SQL Server Books Online.
-        SECURITY NOTE: If you type -Password followed by your password, the password is visible to anyone who can see your monitor. If you code -Password followed by your password in a .ps1 script, anyone reading the script file will see your password. Assign the appropriate NTFS permissions to the file to prevent other users from being able to read the file.
-
     .PARAMETER QueryTimeout
         Specifies the number of seconds before the queries time out.
 
@@ -52,8 +44,12 @@
         None 
             You cannot pipe objects to Invoke-Sqlcmd2 
 
-    .OUTPUTS 
-       System.Data.DataTable 
+    .OUTPUTS
+       As PSObject:     System.Management.Automation.PSCustomObject
+       As DataRow:      System.Data.DataRow
+       As DataTable:    System.Data.DataTable
+       As DataSet:      System.Data.DataTableCollectionSystem.Data.DataSet
+       As SingleValue:  Dependent on data type in first column.
 
     .EXAMPLE 
         Invoke-Sqlcmd2 -ServerInstance "MyComputer\MyInstance" -Query "SELECT login_time AS 'StartTime' FROM sysprocesses WHERE spid = 1" 
@@ -78,7 +74,11 @@
         Invoke-Sqlcmd2 -ServerInstance MyServer\MyInstance -Query "SELECT ServerName, VCNumCPU FROM tblServerInfo" -as PSObject | ?{$_.VCNumCPU -gt 8}
         Invoke-Sqlcmd2 -ServerInstance MyServer\MyInstance -Query "SELECT ServerName, VCNumCPU FROM tblServerInfo" -as PSObject | ?{$_.VCNumCPU}
 
-        This example uses the PSObject output type to allow more flexibility when working with results.  Using a datarow would result in errors for the first example, and would include rows where VCNumCPU has DBNull value.
+        This example uses the PSObject output type to allow more flexibility when working with results.
+        
+        If we used DataRow rather than PSObject, we would see the following behavior:
+            Each row where VCNumCPU does not exist would produce an error in the first example
+            Results would include rows where VCNumCPU has DBNull value in the second example
 
     .EXAMPLE
         'Instance1', 'Server1/Instance1', 'Server2' | Invoke-Sqlcmd2 -query "Sp_databases" -as psobject -AppendServerInstance
@@ -88,19 +88,11 @@
             -------------          ------------- -------        --------------                                                     
             REDACTED                       88320                Instance1                                                      
             master                         17920                Instance1                                                      
-            msdb                          161472                Instance1                                                      
-            REDACTED                      158720                Instance1                                                      
-            tempdb                          8704                Instance1                                                      
-            REDACTED                       92416                Server1/Instance1                                                        
-            master                          7744                Server1/Instance1                                                        
-            msdb                          618112                Server1/Instance1                                                        
-            REDACTED                    10004608                Server1/Instance1                                                        
-            REDACTED                      153600                Server1/Instance1                                                        
-            tempdb                        563200                Server1/Instance1                                                        
-            master                          5120                Server2                                                            
-            msdb                          215552                Server2                                                            
+            ...                                                                                              
+            msdb                          618112                Server1/Instance1                                                                                                              
+            tempdb                        563200                Server1/Instance1
+            ...                                                     
             OperationsManager           20480000                Server2                                                            
-            tempdb                          8704                Server2  
 
     .NOTES 
         Version History 
@@ -118,69 +110,96 @@
         github.com   - https://github.com/RamblingCookieMonster/PowerShell
         v1.5.3       - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
                        RamblingCookieMonster - Added AppendServerInstance switch.
+                       RamblingCookieMonster - Updated OutputType attribute, comment based help, parameter attributes (thanks supersobbie), removed username/password params
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
     #>
 
-    [CmdletBinding(
-        DefaultParameterSetName='Query'
-    )]
-
+    [CmdletBinding( DefaultParameterSetName='Query' )]
+    [OutputType([System.Management.Automation.PSCustomObject],[System.Data.DataRow],[System.Data.DataTable],[System.Data.DataTableCollection],[System.Data.DataSet])]
     param(
         [Parameter( Position=0,
                     Mandatory=$true,
                     ValueFromPipeline=$true,
-                    ValueFromPipelineByPropertyName=$true
-        )]
-        [string[]]$ServerInstance,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false,
+                    HelpMessage='SQL Server Instance required...' )]
+        [Alias( 'Instance', 'Instances', 'ComputerName', 'Server', 'Servers' )]
+        [ValidateNotNullOrEmpty()]
+        [string[]]
+        $ServerInstance,
 
-        [Parameter( Position=1, Mandatory=$false)]
-        [string]$Database,
+        [Parameter( Position=1,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false)]
+        [string]
+        $Database,
     
         [Parameter( Position=2,
                     Mandatory=$true,
-                    ParameterSetName="Query")]
-        [string]$Query,
-    
-        [Parameter( Position=2,
-                    Mandatory=$true,
-                    ParameterSetName="File")]
-        [ValidateScript({test-path $_})]
-        [string]$InputFile,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false,
+                    ParameterSetName='Query' )]
+        [string]
+        $Query,
         
-        [Parameter( ParameterSetName="File")]
-        [Parameter( ParameterSetName="Query")]
-        [Parameter( ParameterSetName="Credential")]
-        [Parameter( Position=3, Mandatory=$false )]
-        [System.Management.Automation.PSCredential]$Credential,
+        [Parameter( Position=2,
+                    Mandatory=$true,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false,
+                    ParameterSetName="File")]
+        [ValidateScript({ Test-Path $_ })]
+        [string]
+        $InputFile,
+        
+        [Parameter( Position=3,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false,
+                    ParameterSetName="Query")]
+        [Parameter( Position=3,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false,
+                    ParameterSetName="File")]
+        [System.Management.Automation.PSCredential]
+        $Credential,
 
-        [Parameter( ParameterSetName="File")]
-        [Parameter( ParameterSetName="Query")]
-        [Parameter( ParameterSetName="Plaintext")]
-        [Parameter(Position=3, Mandatory=$false)]
-        [string]$Username,
-
-        [Parameter( ParameterSetName="File")]
-        [Parameter( ParameterSetName="Query")]
-        [Parameter( ParameterSetName="Plaintext")]
-        [Parameter(Position=4, Mandatory=$false)]
-        [string]$Password,
-
-        [Parameter(Position=5, Mandatory=$false)]
-        [Int32]$QueryTimeout=600,
+        [Parameter( Position=4,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
+        [Int32]
+        $QueryTimeout=600,
     
-        [Parameter(Position=6, Mandatory=$false)]
-        [Int32]$ConnectionTimeout=15,
+        [Parameter( Position=5,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
+        [Int32]
+        $ConnectionTimeout=15,
     
-        [Parameter(Position=7, Mandatory=$false)]
+        [Parameter( Position=6,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
         [ValidateSet("DataSet", "DataTable", "DataRow","PSObject","SingleValue")]
-        [string]$As="DataRow",
+        [string]
+        $As="DataRow",
     
-        [Parameter(Position=8, Mandatory=$false)]
-        [System.Collections.IDictionary]$SqlParameters,
+        [Parameter( Position=7,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
+        [System.Collections.IDictionary]
+        $SqlParameters,
 
-        [switch]$AppendServerInstance
+        [Parameter( Position=8,
+                    Mandatory=$false )]
+        [switch]
+        $AppendServerInstance
     ) 
 
     Begin
@@ -191,7 +210,7 @@
             $Query =  [System.IO.File]::ReadAllText("$filePath") 
         }
 
-        Write-Verbose "Running Invoke-Sqlcmd2 with ParameterSet $($PSCmdlet.ParameterSetName).  Performing query '$Query'"
+        Write-Verbose "Running Invoke-Sqlcmd2 with ParameterSet '$($PSCmdlet.ParameterSetName)'.  Performing query '$Query'"
 
         If($As -eq "PSObject")
         {
@@ -251,10 +270,6 @@
             if ($Credential) 
             {
                 $ConnectionString = "Server={0};Database={1};User ID={2};Password={3};Trusted_Connection=False;Connect Timeout={4}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout
-            }
-            elseif ($Username)
-            {
-                $ConnectionString = "Server={0};Database={1};User ID={2};Password={3};Trusted_Connection=False;Connect Timeout={4}" -f $SQLInstance,$Database,$Username,$Password,$ConnectionTimeout 
             }
             else 
             {
@@ -339,7 +354,7 @@
                 }
                 'SingleValue'
                 {
-                    $ds.Tables[0] | Select-Object -Expand $ds.Tables[0].Columns[0].ColumnName
+                    $ds.Tables[0] | Select-Object -ExpandProperty $ds.Tables[0].Columns[0].ColumnName
                 }
             }
         }
