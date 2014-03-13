@@ -259,7 +259,6 @@
             }
         }
 
-        $conn = New-Object System.Data.SqlClient.SQLConnection
     }
     Process
     {
@@ -275,8 +274,9 @@
             {
                 $ConnectionString = "Server={0};Database={1};Integrated Security=True;Connect Timeout={2}" -f $SQLInstance,$Database,$ConnectionTimeout
             } 
+            
+            $conn = New-Object System.Data.SqlClient.SQLConnection
             $conn.ConnectionString = $ConnectionString 
-     
             Write-Debug "ConnectionString $ConnectionString"
 
             #Following EventHandler is used for PRINT and RAISERROR T-SQL statements. Executed when -Verbose parameter specified by caller 
@@ -315,7 +315,7 @@
             $da = New-Object system.Data.SqlClient.SqlDataAdapter($cmd) 
     
             [void]$da.fill($ds) 
-            $conn.Close() 
+            $conn.Close()
 
             if($AppendServerInstance)
             {
