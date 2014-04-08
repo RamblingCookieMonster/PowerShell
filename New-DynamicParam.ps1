@@ -6,6 +6,11 @@
     .DESCRIPTION
         Helper function to simplify creating dynamic parameters
 
+        Example use cases:
+            Include parameters only if your environment dictates it
+            Include parameters depending on the value of a user-specified parameter
+            Provide tab completion and intellisense for parameters, depending on the environment
+
         Please keep in mind that all dynamic parameters you create will not have corresponding variables created.
            One of the examples illustrates a generic method for populating appropriate variables from dynamic parameters
            Alternatively, manually reference $PSBoundParameters for the dynamic parameter value
@@ -82,20 +87,20 @@
                 #Create the RuntimeDefinedParameterDictionary
                 $Dictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
         
-                NewDynamicParam -Name AlwaysParam -options @( gwmi win32_volume | %{$_.driveletter} | sort ) -DPDictionary $Dictionary
+                New-DynamicParam -Name AlwaysParam -options @( gwmi win32_volume | %{$_.driveletter} | sort ) -DPDictionary $Dictionary
 
                 #Add dynamic parameters to $dictionary
                 if($x -eq 1)
                 {
-                    NewDynamicParam -Name X1Param1 -Options 1,2 -mandatory -DPDictionary $Dictionary
-                    NewDynamicParam -Name X1Param2 -DPDictionary $Dictionary
-                    NewDynamicParam -Name X3Param3 -DPDictionary $Dictionary
+                    New-DynamicParam -Name X1Param1 -Options 1,2 -mandatory -DPDictionary $Dictionary
+                    New-DynamicParam -Name X1Param2 -DPDictionary $Dictionary
+                    New-DynamicParam -Name X3Param3 -DPDictionary $Dictionary
                 }
                 else
                 {
-                    NewDynamicParam -Name OtherParam1 -mandatory -DPDictionary $Dictionary
-                    NewDynamicParam -Name OtherParam2 -DPDictionary $Dictionary
-                    NewDynamicParam -Name OtherParam3 -DPDictionary $Dictionary
+                    New-DynamicParam -Name OtherParam1 -mandatory -DPDictionary $Dictionary
+                    New-DynamicParam -Name OtherParam2 -DPDictionary $Dictionary
+                    New-DynamicParam -Name OtherParam3 -DPDictionary $Dictionary
                 }
         
                 #return RuntimeDefinedParameterDictionary
