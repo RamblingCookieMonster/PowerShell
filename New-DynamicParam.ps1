@@ -3,12 +3,19 @@
     .SYNOPSIS
         Helper function to simplify creating dynamic parameters
     
+    .DESCRIPTION
+        Helper function to simplify creating dynamic parameters
+
+        Please keep in mind that all dynamic parameters you create will not have corresponding variables created.
+           One of the examples illustrates a generic method for populating appropriate variables from dynamic parameters
+           Alternatively, manually reference $PSBoundParameters for the dynamic parameter value
+
     .NOTES
         Credit to http://jrich523.wordpress.com/2013/05/30/powershell-simple-way-to-add-dynamic-parameters-to-advanced-function/
             Added logic to make option set optional
             Added logic to add RuntimeDefinedParameter to existing DPDictionary
             Added a little comment based help
-    
+
     .PARAMETER Name
         Name of the dynamic parameter
 
