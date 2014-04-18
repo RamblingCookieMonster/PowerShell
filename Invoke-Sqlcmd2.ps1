@@ -37,6 +37,13 @@
 
         PSObject output introduces overhead but adds flexibility for working with results: http://powershell.org/wp/forums/topic/dealing-with-dbnull/
 
+    .PARAMETER SqlParameters
+        Hashtable of parameters for parameterized SQL queries.  http://blog.codinghorror.com/give-me-parameterized-sql-or-give-me-death/
+
+        Example:
+            -Query "SELECT ServerName FROM tblServerInfo WHERE ServerName LIKE @ServerName"
+            -SqlParameters @{"ServerName = "c-is-hyperv-1"}
+
     .PARAMETER AppendServerInstance
         If specified, append the server instance to PSObject and DataRow output
 
@@ -94,6 +101,19 @@
             ...                                                     
             OperationsManager           20480000                Server2                                                            
 
+    .EXAMPLE
+        #Construct a query using SQL parameters
+            $Query = "SELECT ServerName, VCServerClass, VCServerContact FROM tblServerInfo WHERE VCServerContact LIKE @VCServerContact AND VCServerClass LIKE @VCServerClass"
+
+        #Run the query, specifying values for SQL parameters
+            Invoke-Sqlcmd2 -ServerInstance SomeServer\NamedInstance -Database ServerDB -query $query -SqlParameters @{ VCServerContact="%cookiemonster%"; VCServerClass="Prod" }
+            
+            ServerName    VCServerClass VCServerContact        
+            ----------    ------------- ---------------        
+            SmoeServer1   Prod          cookiemonster, blah                 
+            SomeServer2   Prod          cookiemonster                 
+            SomeServer3   Prod          blah, cookiemonster                 
+
     .NOTES 
         Version History 
         poshcode.org - http://poshcode.org/4967
@@ -111,6 +131,7 @@
         v1.5.3       - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
                        RamblingCookieMonster - Added AppendServerInstance switch.
                        RamblingCookieMonster - Updated OutputType attribute, comment based help, parameter attributes (thanks supersobbie), removed username/password params
+                       RamblingCookieMonster - Added help for sqlparameter parameter.
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
