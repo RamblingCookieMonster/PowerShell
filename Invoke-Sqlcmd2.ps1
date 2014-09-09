@@ -132,6 +132,8 @@
                        RamblingCookieMonster - Added AppendServerInstance switch.
                        RamblingCookieMonster - Updated OutputType attribute, comment based help, parameter attributes (thanks supersobbie), removed username/password params
                        RamblingCookieMonster - Added help for sqlparameter parameter.
+                       RamblingCookieMonster - Added ErrorAction SilentlyContinue handling to Fill method
+
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
@@ -335,13 +337,29 @@
             $ds = New-Object system.Data.DataSet 
             $da = New-Object system.Data.SqlClient.SqlDataAdapter($cmd) 
     
-            [void]$da.fill($ds) 
-            $conn.Close()
+            Try
+            {
+                [void]$da.fill($ds)
+                $conn.Close()
+            }
+            Catch
+            { 
+                $Err = $_
+                $conn.Close()
+
+                switch ($ErrorActionPreference.tostring())
+                {
+                    {'SilentlyContinue','Ignore' -contains $_} {}
+                    'Stop' {     Throw $Err }
+                    'Continue' { Write-Error $Err}
+                    Default {    Write-Error $Err}
+                }              
+            }
 
             if($AppendServerInstance)
             {
                 #Basics from Chad Miller
-                $Column =  new-object Data.DataColumn
+                $Column =  New-Object Data.DataColumn
                 $Column.ColumnName = "ServerInstance"
                 $ds.Tables[0].Columns.Add($Column)
                 Foreach($row in $ds.Tables[0])
