@@ -269,9 +269,13 @@
 
                     #Get the children's children we care about, and their names.  Also look for signs of a hashtable like type
                         $ChildrensChildren = $ChildValue.psobject.properties | Where {$ExcludeProps -notcontains $_.Name }
-                        $HashKeys = if($ChildValue.Keys -and $ChildValue.Values)
+                        $HashKeys = if($ChildValue.Keys -notlike $null -and $ChildValue.Values)
                         {
                             $ChildValue.Keys
+                        }
+                        else
+                        {
+                            $null
                         }
                         Write-Debug "Found children's children $($ChildrensChildren | select -ExpandProperty Name | Out-String)"
 
