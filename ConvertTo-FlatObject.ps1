@@ -6,7 +6,9 @@
     .DESCRIPTION
         Flatten an object.  This function will take an object, and flatten the properties using their full path into a single object with one layer of properties.
 
-        You can use this to flatten XML, JSON, and other arbitrary objects.  This can simplify initial exploration and discovery of data returned by APIs, interfaces, and other technologies.
+        You can use this to flatten XML, JSON, and other arbitrary objects.
+        
+        This can simplify initial exploration and discovery of data returned by APIs, interfaces, and other technologies.
 
         NOTE:
             Use tools like Get-Member, Select-Object, and Show-Object to further explore objects.
@@ -27,10 +29,13 @@
         This simplifies views of many objects (e.g. XML) but may exclude data for others (e.g. if flattening a process, ProcessThread properties will be excluded)
 
     .PARAMETER Include
-        Include only leafs in this list.  Accepts wildcards.
+        Include only leaves in this list.  Accepts wildcards.
 
         Example:
             -Include Author, Title
+
+    .PARAMETER Value
+        Include only leaves with values like these arguments.  Accepts wildcards.
     
     .PARAMETER MaxDepth
         Stop recursion at this depth.
@@ -125,6 +130,29 @@
             $object.catalog.book[1].genre  : Fantasy
 
     .EXAMPLE
+        #Set up some XML to work with
+            [xml]'<catalog>
+               <book id="bk101">
+                  <author>Gambardella, Matthew</author>
+                  <title>XML Developers Guide</title>
+                  <genre>Computer</genre>
+                  <price>44.95</price>
+               </book>
+               <book id="bk102">
+                  <author>Ralls, Kim</author>
+                  <title>Midnight Rain</title>
+                  <genre>Fantasy</genre>
+                  <price>5.95</price>
+               </book>
+            </catalog>' |
+                ConvertTo-FlatObject -Value XML*, Fantasy
+
+        Result is a flattened object filtered by leaves that matched XML* or Fantasy
+
+            $Object.catalog.book[0].title : XML Developers Guide
+            $Object.catalog.book[1].genre : Fantasy
+
+    .EXAMPLE
         #Get a single process with all props, flatten this object.  Don't exclude default properties
         Get-Process | select -first 1 -skip 10 -Property * | ConvertTo-FlatObject -ExcludeDefault $false
 
@@ -150,13 +178,15 @@
 
         [string[]]$Include = $null,
 
+        [string[]]$Value = $null,
+
         [int]$MaxDepth = 10
     )
     Begin
     {
         #region FUNCTIONS
 
-            #Before adding a property, verify that it matches a wildcard comparison to a string in $Include...
+            #Before adding a property, verify that it matches a Like comparison to strings in $Include...
             Function IsIn-Include {
                 param($prop)
                 if(-not $Include) {$True}
@@ -164,6 +194,21 @@
                     foreach($Inc in $Include)
                     {
                         if($Prop -like $Inc)
+                        {
+                            $True
+                        }
+                    }
+                }
+            }
+
+            #Before adding a value, verify that it matches a Like comparison to strings in $Value...
+            Function IsIn-Value {
+                param($val)
+                if(-not $Value) {$True}
+                else {
+                    foreach($string in $Value)
+                    {
+                        if($val -like $string)
                         {
                             $True
                         }
@@ -180,7 +225,7 @@
                     {
                         Try
                         {
-                            $DefaultTypeProps = @( ([type]$obj.gettype().Fullname).GetProperties() | Select -ExpandProperty Name -ErrorAction Stop )
+                            $DefaultTypeProps = @( $obj.gettype().GetProperties() | Select -ExpandProperty Name -ErrorAction Stop )
                             if($DefaultTypeProps.count -gt 0)
                             {
                                 Write-Verbose "Excluding default properties for $($obj.gettype().Fullname):`n$($DefaultTypeProps | Out-String)"
@@ -236,7 +281,7 @@
                         }
 
                     #Add the property.
-                        if(IsIn-Include $ChildName -and $Depth -le $MaxDepth)
+                        if((IsIn-Include $ChildName) -and (IsIn-Value $ChildValue) -and $Depth -le $MaxDepth)
                         {
                             $ThisPath = @( $Path + $FriendlyChildName ) -join "."
                             $Output | Add-Member -MemberType NoteProperty -Name $ThisPath -Value $ChildValue
@@ -327,7 +372,7 @@
         Foreach($Object in $InputObject)
         {
             #Flatten the XML and write it to the pipeline
-                Recurse-Object -Object $Object -Output $(New-Object -TypeName PSObject)
+                Recurse-Object -Object $Object -Output $( New-Object -TypeName PSObject )
         }
     }
 }
