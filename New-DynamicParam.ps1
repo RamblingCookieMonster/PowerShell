@@ -21,8 +21,16 @@
             Added logic to add RuntimeDefinedParameter to existing DPDictionary
             Added a little comment based help
 
+        Credit to BM for alias and type parameters and their handling
+
     .PARAMETER Name
         Name of the dynamic parameter
+
+    .PARAMETER Type
+        Type for the dynamic parameter.  Default is string
+
+    .PARAMETER Alias
+        If specified, one or more aliases to assign to the dynamic parameter
 
     .PARAMETER ValidateSet
         If specified, set the ValidateSet attribute of this dynamic parameter
@@ -45,6 +53,8 @@
     .PARAMETER DPDictionary
         If specified, add resulting RuntimeDefinedParameter to an existing RuntimeDefinedParameterDictionary (appropriate for multiple dynamic parameters)
         If not specified, create and return a RuntimeDefinedParameterDictionary (appropriate for a single dynamic parameter)
+
+        See final example for illustration
 
     .EXAMPLE
         
@@ -73,7 +83,7 @@
 
     .EXAMPLE
 
-    # I found many cases where I needed to add many dynamic parameters
+    # I found many cases where I needed to add more than one dynamic parameter
     # The DPDictionary parameter lets you specify an existing dictionary
     # The block of code in the Begin block loops through bound parameters and defines variables if they don't exist
 
@@ -87,20 +97,20 @@
                 #Create the RuntimeDefinedParameterDictionary
                 $Dictionary = New-Object System.Management.Automation.RuntimeDefinedParameterDictionary
         
-                New-DynamicParam -Name AlwaysParam -options @( gwmi win32_volume | %{$_.driveletter} | sort ) -DPDictionary $Dictionary
+                New-DynamicParam -Name AlwaysParam -ValidateSet @( gwmi win32_volume | %{$_.driveletter} | sort ) -DPDictionary $Dictionary
 
                 #Add dynamic parameters to $dictionary
                 if($x -eq 1)
                 {
-                    New-DynamicParam -Name X1Param1 -Options 1,2 -mandatory -DPDictionary $Dictionary
+                    New-DynamicParam -Name X1Param1 -ValidateSet 1,2 -mandatory -DPDictionary $Dictionary
                     New-DynamicParam -Name X1Param2 -DPDictionary $Dictionary
-                    New-DynamicParam -Name X3Param3 -DPDictionary $Dictionary
+                    New-DynamicParam -Name X3Param3 -DPDictionary $Dictionary -Type DateTime
                 }
                 else
                 {
-                    New-DynamicParam -Name OtherParam1 -mandatory -DPDictionary $Dictionary
+                    New-DynamicParam -Name OtherParam1 -Mandatory -DPDictionary $Dictionary
                     New-DynamicParam -Name OtherParam2 -DPDictionary $Dictionary
-                    New-DynamicParam -Name OtherParam3 -DPDictionary $Dictionary
+                    New-DynamicParam -Name OtherParam3 -DPDictionary $Dictionary -Type DateTime
                 }
         
                 #return RuntimeDefinedParameterDictionary
@@ -110,7 +120,10 @@
             {
                 #This standard block of code loops through bound parameters...
                 #If no corresponding variable exists, one is created
-                    foreach($param in $PSBoundParameters.Keys)
+                    #Get common parameters, pick out bound parameters not in that set
+                    Function _temp { [cmdletbinding()] param() }
+                    $BoundLeys = $PSBoundParameters.keys | Where-Object { (get-command _temp | select -ExpandProperty parameters).Keys -notcontains $_}
+                    foreach($param in $BoundKeys)
                     {
                         if (-not ( Get-Variable -name $param -scope 0 -ErrorAction SilentlyContinue ) )
                         {
@@ -129,12 +142,22 @@
         # To each New-DynamicParam call, add the -DPDictionary parameter pointing to this RuntimeDefinedParameterDictionary
         # At the end of the DynamicParam block, return the RuntimeDefinedParameterDictionary
         # Initialize all bound parameters using the provided block or similar code
+
+    .FUNCTIONALITY
+        PowerShell Language
+
 #>
 param(
     
     [string]
     $Name,
     
+    [System.Type]
+    $Type = [string],
+
+    [string[]]
+    $Alias = @(),
+
     [string[]]
     $ValidateSet,
     
@@ -193,9 +216,15 @@ param(
             $AttributeCollection.Add($ParamOptions)
         }
 
+    #Aliases if specified
+        if($Alias) {
+            $ParamAlias = New-Object System.Management.Automation.AliasAttribute -ArgumentList $Alias
+            $AttributeCollection.Add($ParamAlias)
+        }
+
  
     #Create the dynamic parameter
-        $Parameter = New-Object -TypeName System.Management.Automation.RuntimeDefinedParameter -ArgumentList @($Name, [string], $AttributeCollection)
+        $Parameter = New-Object -TypeName System.Management.Automation.RuntimeDefinedParameter -ArgumentList @($Name, $Type, $AttributeCollection)
     
     #Add the dynamic parameter to an existing dynamic parameter dictionary, or create the dictionary and add it
         if($DPDictionary)
