@@ -16,6 +16,8 @@
     .PARAMETER Database
         A character string specifying the name of a database. Invoke-Sqlcmd2 connects to this database in the instance that is specified in -ServerInstance.
 
+        If a SQLConnection is provided, we explicitly switch to this database
+
     .PARAMETER Query
         Specifies one or more queries to be run. The queries can be Transact-SQL (? or XQuery statements, or sqlcmd commands. Multiple queries separated by a semicolon can be specified. Do not specify the sqlcmd GO separator. Escape any double quotation marks included in the string ?). Consider using bracketed identifiers such as [MyTable] instead of quoted identifiers such as "MyTable".
 
@@ -23,7 +25,10 @@
         Specifies a file to be used as the query input to Invoke-Sqlcmd2. The file can contain Transact-SQL statements, (? XQuery statements, and sqlcmd commands and scripting variables ?). Specify the full path to the file.
 
     .PARAMETER Credential
-        Specifies A PSCredential for SQL Server Authentication connection to an instance of the Database Engine.  If -Credential is not specified, Invoke-Sqlcmd attempts a Windows Authentication connection using the Windows account running the PowerShell session.
+        Specifies A PSCredential for SQL Server Authentication connection to an instance of the Database Engine.
+        
+        If -Credential is not specified, Invoke-Sqlcmd attempts a Windows Authentication connection using the Windows account running the PowerShell session.
+        
         SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
 
     .PARAMETER QueryTimeout
@@ -46,6 +51,10 @@
 
     .PARAMETER AppendServerInstance
         If specified, append the server instance to PSObject and DataRow output
+
+    .PARAMETER SQLConnection
+        If specified, use an existing SQLConnection.
+            We attempt to open this connection if it is closed
 
     .INPUTS 
         None 
@@ -110,9 +119,19 @@
             
             ServerName    VCServerClass VCServerContact        
             ----------    ------------- ---------------        
-            SmoeServer1   Prod          cookiemonster, blah                 
+            SomeServer1   Prod          cookiemonster, blah                 
             SomeServer2   Prod          cookiemonster                 
             SomeServer3   Prod          blah, cookiemonster                 
+
+    .EXAMPLE
+        Invoke-Sqlcmd2 -SQLConnection $Conn -Query "SELECT login_time AS 'StartTime' FROM sysprocesses WHERE spid = 1" 
+    
+        This example uses an existing SQLConnection and runs a basic T-SQL query against it
+
+        StartTime 
+        ----------- 
+        2010-08-12 21:21:03.593 
+
 
     .NOTES 
         Version History 
@@ -133,16 +152,27 @@
                        RamblingCookieMonster - Updated OutputType attribute, comment based help, parameter attributes (thanks supersobbie), removed username/password params
                        RamblingCookieMonster - Added help for sqlparameter parameter.
                        RamblingCookieMonster - Added ErrorAction SilentlyContinue handling to Fill method
-
+        v1.6.0         RamblingCookieMonster - Added SQLConnection parameter and handling.  Is there a more efficient way to handle the parameter sets?
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
+
+    .FUNCTIONALITY
+        SQL
     #>
 
-    [CmdletBinding( DefaultParameterSetName='Query' )]
+    [CmdletBinding( DefaultParameterSetName='Ins-Que' )]
     [OutputType([System.Management.Automation.PSCustomObject],[System.Data.DataRow],[System.Data.DataTable],[System.Data.DataTableCollection],[System.Data.DataSet])]
     param(
-        [Parameter( Position=0,
+        [Parameter( ParameterSetName='Ins-Que',
+                    Position=0,
+                    Mandatory=$true,
+                    ValueFromPipeline=$true,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false,
+                    HelpMessage='SQL Server Instance required...' )]
+        [Parameter( ParameterSetName='Ins-Fil',
+                    Position=0,
                     Mandatory=$true,
                     ValueFromPipeline=$true,
                     ValueFromPipelineByPropertyName=$true,
@@ -160,33 +190,43 @@
         [string]
         $Database,
     
-        [Parameter( Position=2,
+        [Parameter( ParameterSetName='Ins-Que',
+                    Position=2,
                     Mandatory=$true,
                     ValueFromPipelineByPropertyName=$true,
-                    ValueFromRemainingArguments=$false,
-                    ParameterSetName='Query' )]
+                    ValueFromRemainingArguments=$false )]
+        [Parameter( ParameterSetName='Con-Que',
+                    Position=2,
+                    Mandatory=$true,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
         [string]
         $Query,
         
-        [Parameter( Position=2,
+        [Parameter( ParameterSetName='Ins-Fil',
+                    Position=2,
                     Mandatory=$true,
                     ValueFromPipelineByPropertyName=$true,
-                    ValueFromRemainingArguments=$false,
-                    ParameterSetName="File")]
+                    ValueFromRemainingArguments=$false )]
+        [Parameter( ParameterSetName='Con-Fil',
+                    Position=2,
+                    Mandatory=$true,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
         [ValidateScript({ Test-Path $_ })]
         [string]
         $InputFile,
         
-        [Parameter( Position=3,
+        [Parameter( ParameterSetName='Ins-Que',
+                    Position=3,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
-                    ValueFromRemainingArguments=$false,
-                    ParameterSetName="Query")]
-        [Parameter( Position=3,
+                    ValueFromRemainingArguments=$false)]
+        [Parameter( ParameterSetName='Ins-Fil',
+                    Position=3,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
-                    ValueFromRemainingArguments=$false,
-                    ParameterSetName="File")]
+                    ValueFromRemainingArguments=$false)]
         [System.Management.Automation.PSCredential]
         $Credential,
 
@@ -197,7 +237,13 @@
         [Int32]
         $QueryTimeout=600,
     
-        [Parameter( Position=5,
+        [Parameter( ParameterSetName='Ins-Fil',
+                    Position=5,
+                    Mandatory=$false,
+                    ValueFromPipelineByPropertyName=$true,
+                    ValueFromRemainingArguments=$false )]
+        [Parameter( ParameterSetName='Ins-Que',
+                    Position=5,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
@@ -222,7 +268,24 @@
         [Parameter( Position=8,
                     Mandatory=$false )]
         [switch]
-        $AppendServerInstance
+        $AppendServerInstance,
+
+        [Parameter( ParameterSetName = 'Con-Que',
+                    Position=9,
+                    Mandatory=$false,
+                    ValueFromPipeline=$false,
+                    ValueFromPipelineByPropertyName=$false,
+                    ValueFromRemainingArguments=$false )]
+        [Parameter( ParameterSetName = 'Con-Fil',
+                    Position=9,
+                    Mandatory=$false,
+                    ValueFromPipeline=$false,
+                    ValueFromPipelineByPropertyName=$false,
+                    ValueFromRemainingArguments=$false )]
+        [Alias( 'Connection', 'Conn' )]
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SqlClient.SQLConnection]
+        $SQLConnection
     ) 
 
     Begin
@@ -282,6 +345,44 @@
             }
         }
 
+        #Handle existing connections
+        if($PSBoundParameters.Keys -contains "SQLConnection")
+        {
+
+            if($SQLConnection.State -notlike "Open")
+            {
+                Try
+                {
+                    $SQLConnection.Open()
+                }
+                Catch
+                {
+                    Throw $_
+                }
+            }
+
+            if($Database -and $SQLConnection.Database -notlike $Database)
+            {
+                Try
+                {
+                    $SQLConnection.ChangeDatabase($Database)
+                }
+                Catch
+                {
+                    Throw "Could not change Connection database '$($SQLConnection.Database)' to $Database`: $_"
+                }
+            }
+
+            if($SQLConnection.state -like "Open")
+            {
+                $ServerInstance = @($SQLConnection.DataSource)
+            }
+            else
+            {
+                Throw "SQLConnection is not open"
+            }
+        }
+
     }
     Process
     {
@@ -289,18 +390,36 @@
         {
             Write-Verbose "Querying ServerInstance '$SQLInstance'"
 
-            if ($Credential) 
+            if($PSBoundParameters.Keys -contains "SQLConnection")
             {
-                $ConnectionString = "Server={0};Database={1};User ID={2};Password={3};Trusted_Connection=False;Connect Timeout={4}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout
+                $Conn = $SQLConnection
             }
-            else 
+            else
             {
-                $ConnectionString = "Server={0};Database={1};Integrated Security=True;Connect Timeout={2}" -f $SQLInstance,$Database,$ConnectionTimeout
-            } 
+                if ($Credential) 
+                {
+                    $ConnectionString = "Server={0};Database={1};User ID={2};Password={3};Trusted_Connection=False;Connect Timeout={4}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout
+                }
+                else 
+                {
+                    $ConnectionString = "Server={0};Database={1};Integrated Security=True;Connect Timeout={2}" -f $SQLInstance,$Database,$ConnectionTimeout
+                } 
             
-            $conn = New-Object System.Data.SqlClient.SQLConnection
-            $conn.ConnectionString = $ConnectionString 
-            Write-Debug "ConnectionString $ConnectionString"
+                $conn = New-Object System.Data.SqlClient.SQLConnection
+                $conn.ConnectionString = $ConnectionString 
+                Write-Debug "ConnectionString $ConnectionString"
+
+
+                Try
+                {
+                    $conn.Open() 
+                }
+                Catch
+                {
+                    Write-Error $_
+                    continue
+                }
+            }
 
             #Following EventHandler is used for PRINT and RAISERROR T-SQL statements. Executed when -Verbose parameter specified by caller 
             if ($PSBoundParameters.Verbose) 
@@ -308,17 +427,8 @@
                 $conn.FireInfoMessageEventOnUserErrors=$true 
                 $handler = [System.Data.SqlClient.SqlInfoMessageEventHandler] { Write-Verbose "$($_)" } 
                 $conn.add_InfoMessage($handler) 
-            } 
+            }
     
-            Try
-            {
-                $conn.Open() 
-            }
-            Catch
-            {
-                Write-Error $_
-                continue
-            }
 
             $cmd = New-Object system.Data.SqlClient.SqlCommand($Query,$conn) 
             $cmd.CommandTimeout=$QueryTimeout
