@@ -157,7 +157,7 @@
         Get-Process | select -first 1 -skip 10 -Property * | ConvertTo-FlatObject -ExcludeDefault $false
 
         #NOTE - There will likely be bugs for certain complex objects like this.
-                For example, $Object.StartInfo.Verbs.SyncRoot.SyncRoot... will loop until we hit MaxDepth.
+                For example, $Object.StartInfo.Verbs.SyncRoot.SyncRoot... will loop until we hit MaxDepth. (Note: SyncRoot is now addressed individually)
 
     .NOTES
         I have trouble with algorithms.  If you have a better way to handle this, please let me know!
@@ -295,8 +295,17 @@
                             continue
                         }
 
-                    #Handle evil looping.  Will likely need to expand this.
-                        if($ChildValue.GetType() -eq $Object.GetType() -and $ChildValue -is [datetime])
+                    #Handle evil looping.  Will likely need to expand this.  Any thoughts on a better approach?
+                        if(
+                            (
+                                $ChildValue.GetType() -eq $Object.GetType() -and
+                                $ChildValue -is [datetime]
+                            ) -or
+                            (
+                                $ChildName -eq "SyncRoot" -and
+                                -not $ChildValue
+                            )
+                        )
                         {
                             Write-Verbose "Skipping $ChildName with type $($ChildValue.GetType().fullname)"
                             continue
