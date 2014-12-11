@@ -38,6 +38,9 @@
         WARNING:  Using this parameter requires that maxQueue be set to throttle (it will be by default) for accurate timing.  Details here:
         http://gallery.technet.microsoft.com/Run-Parallel-Parallel-377fd430
 
+    .PARAMETER noCloseOnTimeout
+		Do not dispose of timed out tasks or attempt to close the runspace if threads have timed out. This will prevent the script from hanging in certain situations where threads become non-responsive, at the expense of leaking memory within the PowerShell host.
+
     .PARAMETER maxQueue
 
         Maximum number of powershell instances to add to runspace pool.  If this is higher than $throttle, $timeout will be inaccurate
@@ -137,6 +140,8 @@
 
             [int]$runspaceTimeout = 0,
 
+			[switch]$noCloseOnTimeout = $false,
+
             [int]$maxQueue = $(
                 if($runspaceTimeout -ne 0){$Throttle}
                 else{$throttle * 3}
@@ -216,16 +221,17 @@
                         ElseIf ( $runspaceTimeout -ne 0 -and $runtime.totalseconds -gt $runspaceTimeout) {
                             
                             $script:completedCount++
+                            $timedOutTasks = $true
                             
+							#add logging details and cleanup
+                            $log.status = "TimedOut"
+                            Write-verbose ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1]
+
                             #Depending on how it hangs, we could still get stuck here as dispose calls a synchronous method on the powershell instance
-                            $runspace.powershell.dispose()
+                            if ($noCloseOnTimeout) { $runspace.powershell.dispose() }
                             $runspace.Runspace = $null
                             $runspace.powershell = $null
                             $completedCount++
-
-                            #add logging details and cleanup
-                            $log.status = "TimedOut"
-                            Write-verbose ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1]
 
                         }
                    
@@ -306,6 +312,8 @@
                 $log.Details = $null
                 if($logFile) { ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1] | out-file $logFile -append }
 
+			$timedOutTasks = $false
+
         #endregion INIT
 
     }
@@ -379,9 +387,11 @@
         Write-Verbose ( "Finish processing the remaining runspace jobs: {0}" -f (@(($runspaces | Where {$_.Runspace -ne $Null}).Count)) )
         Get-RunspaceData -wait
 
-        Write-Verbose "Closing the runspace pool"
-        $runspacepool.close()    
-        
+		if ( ($timedOutTasks -eq $false) -or (($timedOutTasks -eq $true) -and ($noCloseOnTimeout -eq $false)) ) {
+	        Write-Verbose "Closing the runspace pool"
+			$runspacepool.close()    
+        }
+
         #collect garbage
         [gc]::Collect()           
     }
