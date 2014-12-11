@@ -387,6 +387,10 @@
         Write-Verbose ( "Finish processing the remaining runspace jobs: {0}" -f (@(($runspaces | Where {$_.Runspace -ne $Null}).Count)) )
         Get-RunspaceData -wait
 
+		Write-Progress -Activity "Running Query"`
+			-Status "Starting threads"`
+			-Completed
+
 		if ( ($timedOutTasks -eq $false) -or (($timedOutTasks -eq $true) -and ($noCloseOnTimeout -eq $false)) ) {
 	        Write-Verbose "Closing the runspace pool"
 			$runspacepool.close()    
