@@ -1,5 +1,3 @@
-This is a fork of Invoke-Parallel that has been tweaked to avoid hangs caused by timed out threads that cannot be closed by adding a -noCloseOnTimeout switch. When the switch is used and a thread times out, the calls to Thread.Dispose() and Runspace.Close() will be skipped. Those calls are synchronous and will never return if threads become non-responsive, as sometimes happens when WMI calls fail in a particular way.
-
-As a side effect, memory consumption within the PowerShell host process will balloon because the resources from timed out threads and the runspace itself are never freed. This can be mitigated by using a PSJob to execute Invoke-Parallel.
+This is a fork of Invoke-Parallel that has been tweaked to avoid hangs caused by timed out thread that cannot be closed by adding a -noCloseOnTimeout switch. This will cause a memory leak within the host process if any threads time out because the threads will not be disposed and the runspace will not be closed. The memory will be freed when the PowerShell host exits. If you have a script that must run continuously you could work around this by wrapping your Invoke-Parallel calls within a PSJob or otherwise running them in a separate process.
 
 Changes have been submitted upstream in https://github.com/RamblingCookieMonster/PowerShell/pull/1
