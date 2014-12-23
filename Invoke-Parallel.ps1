@@ -243,7 +243,7 @@
 							if ($PassThru) { $runspace.object }
 
                             #Depending on how it hangs, we could still get stuck here as dispose calls a synchronous method on the powershell instance
-                            if ($noCloseOnTimeout) { $runspace.powershell.dispose() }
+                            if (!$noCloseOnTimeout) { $runspace.powershell.dispose() }
                             $runspace.Runspace = $null
                             $runspace.powershell = $null
                             $completedCount++
