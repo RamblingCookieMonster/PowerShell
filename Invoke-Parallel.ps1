@@ -361,7 +361,7 @@
             {
                 foreach($Variable in $UserVariables)
                 {
-                    $sessionstate.Variables.Add([System.Management.Automation.Runspaces.SessionStateVariableEntry]::new( $Variable.Name, $Variable.Value, $null ))
+                    $sessionstate.Variables.Add((New-Object -TypeName System.Management.Automation.Runspaces.SessionStateVariableEntry -ArgumentList $Variable.Name, $Variable.Value, $null))
                 }
             }
             if($ImportModules)
