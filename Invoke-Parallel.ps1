@@ -18,13 +18,21 @@
                 Refer to the input object as $_.
                 Refer to the parameter parameter as $parameter
 
-    .PARAMETER inputObject
+    .PARAMETER InputObject
         Run script against these specified objects.
 
-    .PARAMETER parameter
+    .PARAMETER Parameter
         This object is passed to every script block.  You can use it to pass information to the script block; for example, the path to a logging folder
         
             Reference this object as $parameter if using the scriptblock parameterset.
+
+    .PARAMETER ImportVariables
+        If specified, get user session variables and add them to the initial session state
+
+        Note: I've seen this fail with single character variable names
+
+    .PARAMETER ImportModules
+        If specified, get loaded modules and pssnapins, add them to the initial session state
 
     .PARAMETER Throttle
         Maximum number of threads to run at a single time.
@@ -32,16 +40,16 @@
     .PARAMETER SleepTimer
         Milliseconds to sleep after checking for completed runspaces and in a few other spots.  I would not recommend dropping below 200 or increasing above 500
 
-    .PARAMETER runspaceTimeout
+    .PARAMETER RunspaceTimeout
         Maximum time in seconds a single thread can run.  If execution of your code takes longer than this, it is disposed.  Default: 0 (seconds)
 
         WARNING:  Using this parameter requires that maxQueue be set to throttle (it will be by default) for accurate timing.  Details here:
         http://gallery.technet.microsoft.com/Run-Parallel-Parallel-377fd430
 
-    .PARAMETER noCloseOnTimeout
+    .PARAMETER NoCloseOnTimeout
 		Do not dispose of timed out tasks or attempt to close the runspace if threads have timed out. This will prevent the script from hanging in certain situations where threads become non-responsive, at the expense of leaking memory within the PowerShell host.
 
-    .PARAMETER maxQueue
+    .PARAMETER MaxQueue
 
         Maximum number of powershell instances to add to runspace pool.  If this is higher than $throttle, $timeout will be inaccurate
         
@@ -50,11 +58,11 @@
         The default value is $throttle times 3, if $runspaceTimeout is not specified
         The default value is $throttle, if $runspaceTimeout is specified
 
-    .PARAMETER logFile
+    .PARAMETER LogFile
 
         Path to a file where we can log results, including run time for each thread, whether it completes, completes with errors, or times out.
 
-	.PARAMETER quiet
+	.PARAMETER Quiet
 
 		Disable progress bar.
 
@@ -117,13 +125,23 @@
 
         Inside the script block, $parameter is used to reference this parameter object.  This example sets a content file, gets content from that file, and sets it to a predefined log file.
 
+    .EXAMPLE
+        $test = 5
+        1..2 | Invoke-Parallel -ImportVariables {$_ * $test}
+
+        Add variables from the current session to the session state.  Without -ImportVariables $Test would not be accessible
+
     .FUNCTIONALITY
         PowerShell Language
 
     .NOTES
         Credit to Boe Prox 
-        http://learn-powershell.net/2012/05/10/speedy-network-information-query-using-powershell/
-        http://gallery.technet.microsoft.com/scriptcenter/Speedy-Network-Information-5b1406fb#content
+            http://learn-powershell.net/2012/05/10/speedy-network-information-query-using-powershell/
+            http://gallery.technet.microsoft.com/scriptcenter/Speedy-Network-Information-5b1406fb#content
+
+        Credit to T Bryce Yehl for the Quiet and NoCloseOnTimeout implementations
+
+        Credit to Sergei Vorobev for the ImportModules and ImportVariables idea, and basis for implementation
 
     .LINK
         http://gallery.technet.microsoft.com/Run-Parallel-Parallel-377fd430
@@ -135,36 +153,76 @@
 
         [Parameter(Mandatory=$false,ParameterSetName='ScriptFile')]
         [ValidateScript({test-path $_ -pathtype leaf})]
-            $scriptFile,
+            $ScriptFile,
 
         [Parameter(Mandatory=$true,ValueFromPipeline=$true)]
         [Alias('CN','__Server','IPAddress','Server','ComputerName')]    
             [PSObject]$InputObject,
 
-            [PSObject]$parameter,
+            [PSObject]$Parameter,
+
+            [switch]$ImportVariables,
+
+            [switch]$ImportModules,
 
             [int]$Throttle = 20,
 
             [int]$SleepTimer = 200,
 
-            [int]$runspaceTimeout = 0,
+            [int]$RunspaceTimeout = 0,
 
-			[switch]$noCloseOnTimeout = $false,
+			[switch]$NoCloseOnTimeout = $false,
 
-            [int]$maxQueue = $(
-                if($runspaceTimeout -ne 0){$Throttle}
-                else{$throttle * 3}
-            ),
+            [int]$MaxQueue,
 
         [validatescript({test-path (Split-Path $_ -parent)})]
-            [string]$logFile = "C:\temp\log.log",
+            [string]$LogFile = "C:\temp\log.log",
 
-			[switch] $quiet=$false
+			[switch] $Quiet = $false
     )
     
     Begin {
         
         write-verbose "Throttle: '$throttle' SleepTimer '$sleepTimer' runSpaceTimeout '$runspaceTimeout' maxQueue '$maxQueue' logFile '$logFile'"
+        
+        #No max queue specified?  Estimate one.
+        if( -not $PSBoundParameters.ContainsKey('MaxQueue') )
+        {
+            if($RunspaceTimeout -ne 0){ $MaxQueue = $Throttle }
+            else{ $MaxQueue = $Throttle * 3 }
+        }
+
+        #If they want to import variables or modules, create a clean runspace, get loaded items, use those to exclude items
+        if($ImportVariables -or $ImportModules)
+        {
+            $StandardUserEnv = [powershell]::Create().addscript({
+
+                #Get modules and snapins in this clean runspace
+                $Modules = Get-Module | Select -ExpandProperty Name
+                $Snapins = Get-PSSnapin | Select -ExpandProperty Name
+
+                #Get variables in this clean runspace
+                #Called last to get vars like $? into session
+                $Variables = Get-Variable | Select -ExpandProperty Name
+                
+                #Return a hashtable where we can access each.
+                @{
+                    Variables = $Variables
+                    Modules = $Modules
+                    Snapins = $Snapins
+                }
+            }).invoke()
+            
+            #Exclude common parameters, bound parameters, and automatic variables
+            Function _temp {[cmdletbinding()] param() }
+            $VariablesToExclude = @( (Get-Command _temp | select -ExpandProperty parameters).Keys + $PSBoundParameters.Keys + $StandardUserEnv.Variables )
+
+            $UserVariables = Get-Variable -Exclude $VariablesToExclude
+            $UserModules = Get-Module | Where {$StandardUserEnv.Modules -notcontains $_.Name -and (Test-Path $_.Path -ErrorAction SilentlyContinue)} | Select -ExpandProperty Path
+            $UserSnapins = Get-PSSnapin | Select -ExpandProperty Name | Where {$StandardUserEnv.Snapins -notcontains $_ } 
+            Write-Verbose "Found variables to import: $( ($UserVariables | Select -expandproperty Name | Sort ) -join ", " | Out-String).`n"
+        }
+        
         #region functions
             
             Function Get-RunspaceData {
@@ -179,7 +237,7 @@
                     $more = $false
 
                     #Progress bar if we have inputobject count (bound parameter)
-                    if (!$quiet) {
+                    if (!$Quiet) {
 						Write-Progress  -Activity "Running Query"`
 							-Status "Starting threads"`
 							-CurrentOperation "$startedCount threads defined - $totalCount input objects - $script:completedCount input objects processed"`
@@ -212,14 +270,14 @@
                                 
                                 #set the logging info and move the file to completed
                                 $log.status = "CompletedWithErrors"
-                                Write-Verbose ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1]
+                                Write-Verbose ($log | ConvertTo-Csv -Delimiter ";" -NoTypeInformation)[1]
 
                             }
                             else {
                                 
                                 #add logging details and cleanup
                                 $log.status = "Completed"
-                                Write-Verbose ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1]
+                                Write-Verbose ($log | ConvertTo-Csv -Delimiter ";" -NoTypeInformation)[1]
                             }
 
                             #everything is logged, clean up the runspace
@@ -238,7 +296,7 @@
                             
 							#add logging details and cleanup
                             $log.status = "TimedOut"
-                            Write-verbose ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1]
+                            Write-verbose ($log | ConvertTo-Csv -Delimiter ";" -NoTypeInformation)[1]
 
 							if ($PassThru) { $runspace.object }
 
@@ -258,9 +316,8 @@
 
                         #log the results if a log file was indicated
                         if($logFile -and $log){
-                            ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1] | out-file $logFile -append
+                            ($log | ConvertTo-Csv -Delimiter ";" -NoTypeInformation)[1] | out-file $LogFile -append
                         }
-
                     }
 
                     #Clean out unused runspace jobs
@@ -270,7 +327,7 @@
                     }
 
                     #sleep for a bit if we will loop again
-                    if($PSBoundParameters['Wait']){ start-sleep -milliseconds $SleepTimer }
+                    if($PSBoundParameters['Wait']){ Start-Sleep -milliseconds $SleepTimer }
 
                 #Loop again only if -wait parameter and there are more runspaces to process
                 } while ($more -and $PSBoundParameters['Wait'])
@@ -290,15 +347,36 @@
                 }
                 
                 'ScriptFile' {
-                    $scriptblock = [scriptblock]::Create($(get-content $scriptFile | out-string))
+                    $ScriptBlock = [scriptblock]::Create( $(Get-Content $ScriptFile | out-string) )
                 }
                 
                 Default {Throw "Must provide ScriptBlock or ScriptFile"; Break}
             }
 
-            #Create runspace pool with specified throttle
             Write-Verbose "Creating runspace pool and session states"
-            $sessionstate = [system.management.automation.runspaces.initialsessionstate]::CreateDefault()
+
+            #If specified, add variables and modules/snapins to session state
+            $sessionstate = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
+            if($ImportVariables)
+            {
+                foreach($Variable in $UserVariables)
+                {
+                    $sessionstate.Variables.Add([System.Management.Automation.Runspaces.SessionStateVariableEntry]::new( $Variable.Name, $Variable.Value, $null ))
+                }
+            }
+            if($ImportModules)
+            {
+                foreach($ModulePath in $UserModules)
+                {
+                    $sessionstate.ImportPSModule($ModulePath)
+                }
+                foreach($PSSnapin in $UserSnapins)
+                {
+                    [void]$sessionstate.ImportPSSnapIn($PSSnapin, [ref]$null)
+                }
+            }
+
+            #Create runspace pool
             $runspacepool = [runspacefactory]::CreateRunspacePool(1, $Throttle, $sessionstate, $Host)
             $runspacepool.Open() 
 
@@ -313,9 +391,9 @@
             }
 
             #Set up log file if specified
-            if( $logFile ){
-                new-item -ItemType file -path $logFile -force | out-null
-                ("" | Select Date, Action, Runtime, Status, Details | ConvertTo-Csv -NoTypeInformation -Delimiter ";")[0] | out-file $logFile
+            if( $LogFile ){
+                New-Item -ItemType file -path $logFile -force | Out-Null
+                ("" | Select Date, Action, Runtime, Status, Details | ConvertTo-Csv -NoTypeInformation -Delimiter ";")[0] | Out-File $LogFile
             }
 
             #write initial log entry
@@ -325,16 +403,15 @@
                 $log.Runtime = $null
                 $log.Status = "Started"
                 $log.Details = $null
-                if($logFile) { ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1] | out-file $logFile -append }
+                if($logFile) { ($log | convertto-csv -Delimiter ";" -NoTypeInformation)[1] | Out-File $LogFile -Append }
 
 			$timedOutTasks = $false
 
         #endregion INIT
-
     }
 
     Process {
-        
+
         #add piped objects to all objects or set all objects to bound input object parameter
         if( -not $global:__bound ){
             $allObjects += $inputObject
@@ -342,7 +419,6 @@
         else{
             $allObjects = $InputObject
         }
-       
     }
 
     End {
@@ -365,7 +441,7 @@
                 #Create a temporary collection for each runspace
                 $temp = "" | Select-Object PowerShell, StartTime, object, Runspace
                 $temp.PowerShell = $powershell
-                $temp.StartTime = get-date
+                $temp.StartTime = Get-Date
                 $temp.object = $object
     
                 #Save the handle output when calling BeginInvoke() that will be used later to end the runspace
@@ -381,7 +457,7 @@
 
                 #If we have more running than max queue (used to control timeout accuracy)
                 $firstRun = $true
-                while ($runspaces.count -ge $maxQueue) {
+                while ($runspaces.count -ge $MaxQueue) {
 
                     #give verbose output
                     if($firstRun){
@@ -391,12 +467,11 @@
                     
                     #run get-runspace data and sleep for a short while
                     Get-RunspaceData
-                    Start-Sleep -milliseconds $sleepTimer
+                    Start-Sleep -Milliseconds $sleepTimer
                     
                 }
 
             #endregion add scripts to runspace pool
-
         }
                      
         Write-Verbose ( "Finish processing the remaining runspace jobs: {0}" -f (@(($runspaces | Where {$_.Runspace -ne $Null}).Count)) )
@@ -410,7 +485,7 @@
 
 		if ( ($timedOutTasks -eq $false) -or (($timedOutTasks -eq $true) -and ($noCloseOnTimeout -eq $false)) ) {
 	        Write-Verbose "Closing the runspace pool"
-			$runspacepool.close()    
+			$runspacepool.close()
         }
 
         #collect garbage
