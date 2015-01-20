@@ -183,7 +183,7 @@
     
     Begin {
         
-        write-verbose "Throttle: '$throttle' SleepTimer '$sleepTimer' runSpaceTimeout '$runspaceTimeout' maxQueue '$maxQueue' logFile '$logFile'"
+        Write-Verbose "Throttle: '$throttle' SleepTimer '$sleepTimer' runSpaceTimeout '$runspaceTimeout' maxQueue '$maxQueue' logFile '$logFile'"
         
         #No max queue specified?  Estimate one.
         if( -not $PSBoundParameters.ContainsKey('MaxQueue') )
@@ -248,9 +248,9 @@
                     Foreach($runspace in $runspaces) {
                     
                         #get the duration - inaccurate
-                        $currentdate = get-date
+                        $currentdate = Get-Date
                         $runtime = $currentdate - $runspace.startTime
-                        $runMin = [math]::round( $runtime.totalminutes ,2 )
+                        $runMin = [math]::Round( $runtime.totalminutes ,2 )
 
                         #set up log object
                         $log = "" | select Date, Action, Runtime, Status, Details
@@ -423,72 +423,80 @@
 
     End {
         
-        #counts for progress
-        $totalCount = $allObjects.count
-        $script:completedCount = 0
-        $startedCount = 0
+        #Use Try/Finally to catch Ctrl+C and clean up.
+        Try
+        {
+            #counts for progress
+            $totalCount = $allObjects.count
+            $script:completedCount = 0
+            $startedCount = 0
 
-        foreach($object in $allObjects){
+            foreach($object in $allObjects){
         
-            #region add scripts to runspace pool
+                #region add scripts to runspace pool
                 
-                #Create the powershell instance and supply the scriptblock with the other parameters
-                $powershell = [powershell]::Create().AddScript($ScriptBlock).AddArgument($object).AddArgument($parameter)
+                    #Create the powershell instance and supply the scriptblock with the other parameters
+                    $powershell = [powershell]::Create().AddScript($ScriptBlock).AddArgument($object).AddArgument($parameter)
     
-                #Add the runspace into the powershell instance
-                $powershell.RunspacePool = $runspacepool
+                    #Add the runspace into the powershell instance
+                    $powershell.RunspacePool = $runspacepool
     
-                #Create a temporary collection for each runspace
-                $temp = "" | Select-Object PowerShell, StartTime, object, Runspace
-                $temp.PowerShell = $powershell
-                $temp.StartTime = Get-Date
-                $temp.object = $object
+                    #Create a temporary collection for each runspace
+                    $temp = "" | Select-Object PowerShell, StartTime, object, Runspace
+                    $temp.PowerShell = $powershell
+                    $temp.StartTime = Get-Date
+                    $temp.object = $object
     
-                #Save the handle output when calling BeginInvoke() that will be used later to end the runspace
-                $temp.Runspace = $powershell.BeginInvoke()
-                $startedCount++
+                    #Save the handle output when calling BeginInvoke() that will be used later to end the runspace
+                    $temp.Runspace = $powershell.BeginInvoke()
+                    $startedCount++
 
-                #Add the temp tracking info to $runspaces collection
-                Write-Verbose ( "Adding {0} to collection at {1}" -f $temp.object, $temp.starttime.tostring() )
-                $runspaces.Add($temp) | Out-Null
+                    #Add the temp tracking info to $runspaces collection
+                    Write-Verbose ( "Adding {0} to collection at {1}" -f $temp.object, $temp.starttime.tostring() )
+                    $runspaces.Add($temp) | Out-Null
             
-                #loop through existing runspaces one time
-                Get-RunspaceData
-
-                #If we have more running than max queue (used to control timeout accuracy)
-                $firstRun = $true
-                while ($runspaces.count -ge $MaxQueue) {
-
-                    #give verbose output
-                    if($firstRun){
-                        Write-Verbose "$($runspaces.count) items running - exceeded $maxQueue limit."
-                    }
-                    $firstRun = $false
-                    
-                    #run get-runspace data and sleep for a short while
+                    #loop through existing runspaces one time
                     Get-RunspaceData
-                    Start-Sleep -Milliseconds $sleepTimer
+
+                    #If we have more running than max queue (used to control timeout accuracy)
+                    $firstRun = $true
+                    while ($runspaces.count -ge $MaxQueue) {
+
+                        #give verbose output
+                        if($firstRun){
+                            Write-Verbose "$($runspaces.count) items running - exceeded $maxQueue limit."
+                        }
+                        $firstRun = $false
                     
-                }
+                        #run get-runspace data and sleep for a short while
+                        Get-RunspaceData
+                        Start-Sleep -Milliseconds $sleepTimer
+                    
+                    }
 
-            #endregion add scripts to runspace pool
-        }
+                #endregion add scripts to runspace pool
+            }
                      
-        Write-Verbose ( "Finish processing the remaining runspace jobs: {0}" -f (@(($runspaces | Where {$_.Runspace -ne $Null}).Count)) )
-        Get-RunspaceData -wait
+            Write-Verbose ( "Finish processing the remaining runspace jobs: {0}" -f (@(($runspaces | Where {$_.Runspace -ne $Null}).Count)) )
+            Get-RunspaceData -wait
 
-        if (!$quiet) {
-			Write-Progress -Activity "Running Query"`
-				-Status "Starting threads"`
-				-Completed
-		}
+            if (!$quiet) {
+			    Write-Progress -Activity "Running Query"`
+				    -Status "Starting threads"`
+				    -Completed
+		    }
 
-		if ( ($timedOutTasks -eq $false) -or (($timedOutTasks -eq $true) -and ($noCloseOnTimeout -eq $false)) ) {
-	        Write-Verbose "Closing the runspace pool"
-			$runspacepool.close()
         }
+        Finally
+        {
 
-        #collect garbage
-        [gc]::Collect()           
+            if ( ($timedOutTasks -eq $false) -or (($timedOutTasks -eq $true) -and ($noCloseOnTimeout -eq $false)) ) {
+	            Write-Verbose "Closing the runspace pool"
+			    $runspacepool.close()
+            }
+
+            #collect garbage
+            [gc]::Collect()
+        }       
     }
 }
