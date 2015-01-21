@@ -217,7 +217,7 @@ param(
         }
 
     #Aliases if specified
-        if($Alias) {
+        if($Alias.count -gt 0) {
             $ParamAlias = New-Object System.Management.Automation.AliasAttribute -ArgumentList $Alias
             $AttributeCollection.Add($ParamAlias)
         }
