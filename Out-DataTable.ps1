@@ -7,6 +7,12 @@
 .DESCRIPTION
     Creates a DataTable based on an object's properties.
 
+.PARAMETER InputObject
+    One or more objects to convert into a DataTable
+
+.PARAMETER NonNullable
+    A list of columns to set disable AllowDBNull on
+
 .INPUTS
     Object
         Any object can be piped to Out-DataTable
@@ -15,11 +21,17 @@
    System.Data.DataTable
 
 .EXAMPLE
-    $dt = Get-psdrive| Out-DataTable
-    This example creates a DataTable from the properties of Get-psdrive and assigns output to $dt variable
+    $dt = Get-psdrive | Out-DataTable
+    
+    # This example creates a DataTable from the properties of Get-psdrive and assigns output to $dt variable
+
+.EXAMPLE
+    Get-Process | Select Name, CPU | Out-DataTable | Invoke-SQLBulkCopy -ServerInstance $SQLInstance -Database $Database -Table $SQLTable -force -verbose
+
+    # Get a list of processes and their CPU, create a datatable, bulk import that data
 
 .NOTES
-    Adapted from script by Marc van Orsouw see link
+    Adapted from script by Marc van Orsouw and function from Chad Miller
     Version History
     v1.0  - Chad Miller - Initial Release
     v1.1  - Chad Miller - Fixed Issue with Properties
@@ -33,12 +45,22 @@
                                   - Added perhaps pointless error handling
 
 .LINK
-    http://thepowershellguy.com/blogs/posh/archive/2007/01/21/powershell-gui-scripblock-monitor-script.aspx
+    https://github.com/RamblingCookieMonster/PowerShell
+
+.LINK
+    Invoke-SQLBulkCopy
+
+.LINK
+    Invoke-Sqlcmd2
+
+.LINK
+    New-SQLConnection
 
 .FUNCTIONALITY
     SQL
 #>
     [CmdletBinding()]
+    [OutputType([System.Data.DataTable])]
     param(
         [Parameter( Position=0,
                     Mandatory=$true,
@@ -118,7 +140,6 @@
                     {
                         Write-Error "Could not add column $($Col | Out-String) for property '$Name' with value '$Value' and type '$($Value.GetType().FullName)':`n$_"
                     }
-
                 }  
                 
                 Try
@@ -161,13 +182,12 @@
             }
 
             $First = $false
-
         }
     } 
      
     End
     {
-        Write-Output @(,($dt))
+        Write-Output @(,$dt)
     }
 
 } #Out-DataTable
