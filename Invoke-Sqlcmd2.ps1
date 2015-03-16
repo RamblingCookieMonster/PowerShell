@@ -450,12 +450,18 @@
             Try
             {
                 [void]$da.fill($ds)
-                $conn.Close()
+                if($PSBoundParameters.Keys -notcontains "SQLConnection")
+                {
+                    $conn.Close()
+                }
             }
             Catch
             { 
                 $Err = $_
-                $conn.Close()
+                if($PSBoundParameters.Keys -notcontains "SQLConnection")
+                {
+                    $conn.Close()
+                }
 
                 switch ($ErrorActionPreference.tostring())
                 {

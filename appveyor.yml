@@ -1,0 +1,19 @@
+# See http://www.appveyor.com/docs/appveyor-yml for many more options
+
+# Skip on updates to the readme.
+# We can force this by adding [skip ci] or [ci skip] anywhere in commit message 
+skip_commits:
+  message: /updated readme.*/
+
+install:
+  - cinst pester -y
+
+build: false
+
+test_script:
+# Test with native PS version
+  - ps: . .\Tests\appveyor.pester.ps1 -Test
+# Test with PS version 2
+  - ps: powershell.exe -version 2.0 -executionpolicy bypass -noprofile -file .\Tests\appveyor.pester.ps1 -Test
+# Finalize pass - collect and upload results
+  - ps: . .\Tests\appveyor.pester.ps1 -Finalize
