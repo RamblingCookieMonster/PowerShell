@@ -148,14 +148,24 @@
                  
         github.com   - https://github.com/RamblingCookieMonster/PowerShell
         v1.5.3       - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
-                       RamblingCookieMonster - Added AppendServerInstance switch.
-                       RamblingCookieMonster - Updated OutputType attribute, comment based help, parameter attributes (thanks supersobbie), removed username/password params
-                       RamblingCookieMonster - Added help for sqlparameter parameter.
-                       RamblingCookieMonster - Added ErrorAction SilentlyContinue handling to Fill method
-        v1.6.0         RamblingCookieMonster - Added SQLConnection parameter and handling.  Is there a more efficient way to handle the parameter sets?
+                                             - Added AppendServerInstance switch.
+                                             - Updated OutputType attribute, comment based help, parameter attributes (thanks supersobbie), removed username/password params
+                                             - Added help for sqlparameter parameter.
+                                             - Added ErrorAction SilentlyContinue handling to Fill method
+        v1.6.0                               - Added SQLConnection parameter and handling.  Is there a more efficient way to handle the parameter sets?
+                                             - Fixed SQLConnection handling so that it is not closed (we now only close connections we create)
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
+
+    .LINK
+        New-SQLConnection
+
+    .LINK
+        Invoke-SQLBulkCopy
+
+    .LINK
+        Out-DataTable
 
     .FUNCTIONALITY
         SQL
@@ -450,18 +460,12 @@
             Try
             {
                 [void]$da.fill($ds)
-                if($PSBoundParameters.Keys -notcontains "SQLConnection")
-                {
-                    $conn.Close()
-                }
+                $conn.Close()
             }
             Catch
             { 
                 $Err = $_
-                if($PSBoundParameters.Keys -notcontains "SQLConnection")
-                {
-                    $conn.Close()
-                }
+                $conn.Close()
 
                 switch ($ErrorActionPreference.tostring())
                 {
