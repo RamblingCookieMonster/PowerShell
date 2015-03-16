@@ -11,7 +11,7 @@ if($env:APPVEYOR_REPO_BRANCH -and $env:APPVEYOR_REPO_BRANCH -notlike "master")
     $Verbose.add("Verbose",$True)
 }
 
-Import-Module -Force $PSScriptRoot\..\Wait-Path.ps1 -force
+Import-Module $PSScriptRoot\..\Wait-Path.ps1 -force
 
 Describe "Wait-Path PS$PSVersion" {
     
