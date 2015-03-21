@@ -91,12 +91,18 @@
 	param(
 		
 		[Parameter(Position=0, ValueFromPipeline=$true,ParameterSetName='name')]
+		[Parameter(ValueFromPipeline=$false,ParameterSetName='address')]
+		[Parameter(ValueFromPipeline=$false,ParameterSetName='port')]
 		[System.String]$ProcessName='*',
 		
 		[Parameter(Position=0, ValueFromPipeline=$true,ParameterSetName='address')]
+		[Parameter(ValueFromPipeline=$false,ParameterSetName='name')]
+		[Parameter(ValueFromPipeline=$false,ParameterSetName='port')]
 		[System.String]$Address='*',		
 		
-        [Parameter(ValueFromPipeline=$true,ParameterSetName='port')]
+        [Parameter(Position=0, ValueFromPipeline=$true,ParameterSetName='port')]
+        [Parameter(ValueFromPipeline=$false,ParameterSetName='address')]
+		[Parameter(ValueFromPipeline=$false,ParameterSetName='name')]
 		$Port='*',
 
 		[Parameter()]
@@ -265,6 +271,7 @@
 
                     #Filter the object
 				        if($remotePort -notlike $Port -and $localPort -notlike $Port){
+                            write-verbose "remote $Remoteport local $localport port $port"
                             Write-Verbose "Filtered by Port:`n$result"
                             continue
 				        }
