@@ -86,36 +86,26 @@
         http://gallery.technet.microsoft.com/scriptcenter/Get-NetworkStatistics-66057d71
     #>	
 	[OutputType('System.Management.Automation.PSObject')]
-	[CmdletBinding(DefaultParameterSetName='name')]
-	
+	[CmdletBinding()]
 	param(
 		
-		[Parameter(Position=0, ValueFromPipeline=$true,ParameterSetName='name')]
-		[Parameter(ValueFromPipeline=$false,ParameterSetName='address')]
-		[Parameter(ValueFromPipeline=$false,ParameterSetName='port')]
+		[Parameter(Position=0)]
 		[System.String]$ProcessName='*',
 		
-		[Parameter(Position=0, ValueFromPipeline=$true,ParameterSetName='address')]
-		[Parameter(ValueFromPipeline=$false,ParameterSetName='name')]
-		[Parameter(ValueFromPipeline=$false,ParameterSetName='port')]
+		[Parameter(Position=1)]
 		[System.String]$Address='*',		
 		
-        [Parameter(Position=0, ValueFromPipeline=$true,ParameterSetName='port')]
-        [Parameter(ValueFromPipeline=$false,ParameterSetName='address')]
-		[Parameter(ValueFromPipeline=$false,ParameterSetName='name')]
+		[Parameter(Position=2)]
 		$Port='*',
 
-		[Parameter()]
+		[Parameter(Position=3)]
+        [System.String]$computername=$env:COMPUTERNAME,
+
 		[ValidateSet('*','tcp','udp')]
 		[System.String]$Protocol='*',
 
-		[Parameter()]
 		[ValidateSet('*','Closed','Close_Wait','Closing','Delete_Tcb','DeleteTcb','Established','Fin_Wait_1','Fin_Wait_2','Last_Ack','Listening','Syn_Received','Syn_Sent','Time_Wait','Unknown')]
 		[System.String]$State='*',
-        
-        [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
-        [validatescript({test-connection -count 2 -buffersize 16 -quiet -ComputerName $_})]
-        [System.String]$computername=$env:COMPUTERNAME,
 
         [switch]$ShowHostnames,
         
@@ -297,7 +287,7 @@
                             -PercentComplete (( $count / $totalCount ) * 100)
     			
                     #If we are running showprocessnames, get the matching name
-                        if($ShowProcessNames -or $PSCmdlet.ParameterSetName -eq 'name'){
+                        if($ShowProcessNames -or $PSBoundParameters.ContainsKey -eq 'ProcessName'){
                     
                             #handle case where process spun up in the time between running get-process and running netstat
                             if($procName = $processes | Where {$_.id -eq $procId} | select -ExpandProperty name ){ }
