@@ -564,7 +564,10 @@
         }
         Else
         {
-            $AllComputers.add($ComputerName) | Out-Null
+            foreach($Computer in $ComputerName)
+            {
+                $AllComputers.add($Computer) | Out-Null
+            }
         }
 
     }
