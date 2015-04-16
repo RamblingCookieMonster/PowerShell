@@ -186,13 +186,11 @@
         [Parameter(Mandatory = $true)]
         [string] $RightJoinProperty,
 
-        [object[]]
-        $LeftProperties = '*',
+        [object[]]$LeftProperties = '*',
 
         # Properties from $Right we want in the output.
         # Like LeftProperties, each can be a plain name, wildcard or hashtable. See the LeftProperties comments.
-        [object[]]
-        $RightProperties = '*',
+        [object[]]$RightProperties = '*',
 
         [validateset( 'AllInLeft', 'OnlyIfInBoth', 'AllInBoth', 'AllInRight')]
         [Parameter(Mandatory=$false)]
@@ -346,7 +344,7 @@
     $RightProperties = TranslateProperties -Properties $RightProperties -Side 'Right' -RealObject $Right[0]
 
     #I prefer ordered output. Left properties first.
-    [object[]]$AllProps = $LeftProperties
+    [string[]]$AllProps = $LeftProperties
 
     #Handle prefixes, suffixes, and building AllProps with Name only
     $RightProperties = foreach($RightProp in $RightProperties)
