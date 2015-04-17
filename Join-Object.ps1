@@ -169,6 +169,12 @@
         TODO:
             Testing, tweaking.
 
+    .LINK
+        http://ramblingcookiemonster.github.io/Join-Object/
+
+    .FUNCTIONALITY
+        PowerShell Language
+
     #>
     [CmdletBinding()]
     Param
