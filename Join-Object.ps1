@@ -81,7 +81,7 @@
         OnlyIfInBoth will cause all elements from Left to be placed in the output, only if there is at least one
           match in Right.
           SQL equivalent: inner join (or simply join)
-          
+         
         AllInBoth will have all entries in right and left in the output. Specifically, it will have all entries
           in right with at least one match in left, followed by all entries in Right with no matches in left, 
           followed by all entries in Left with no matches in Right.
@@ -214,7 +214,7 @@
             {
                 $hashName = $propertyHash["name"] -as [string]         
                 $expression = $propertyHash["expression"] -as [scriptblock]
-         
+
                 $expressionValue = $expression.Invoke($item)[0]
             
                 $hash[$hashName] = $expressionValue
@@ -245,25 +245,14 @@
             $propertyHash = $Prop -as [hashtable]
             if($null -ne $propertyHash)
             {
-                $hashName = $propertyHash["name"] -as [string]
-                if($null -eq $hashName)
-                {
-                    Throw "$Side property $($Prop) is invalid`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}"  
-                }
-         
+                $hashName = $propertyHash["name"] -as [string]         
                 $expression = $propertyHash["expression"] -as [scriptblock]
-                if($null -eq $expression)
+
+                $ScriptString = $expression.tostring()
+                if($ScriptString -notmatch 'param\(')
                 {
-                    Throw "$Side property $($Prop) is invalid`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}"  
-                }
-                else
-                {
-                    $ScriptString = $expression.tostring()
-                    if($ScriptString -notmatch 'param\(')
-                    {
-                        Write-Verbose "Property '$HashName'`: Adding param(`$_) to scriptblock '$ScriptString'"
-                        $Expression = [ScriptBlock]::Create("param(`$_)`n $ScriptString")
-                    }
+                    Write-Verbose "Property '$HashName'`: Adding param(`$_) to scriptblock '$ScriptString'"
+                    $Expression = [ScriptBlock]::Create("param(`$_)`n $ScriptString")
                 }
                 
                 $Output = @{Name =$HashName; Expression = $Expression }
@@ -292,6 +281,42 @@
         AddItemProperties $rightItem $rightProperties $properties
 
         New-Object psobject -Property $properties
+    }
+
+    #Translate variations on calculated properties.  Doing this once shouldn't affect perf too much.
+    foreach($Prop in @($LeftProperties + $RightProperties))
+    {
+        if($Prop -as [hashtable])
+        {
+            foreach($variation in ('n','label','l'))
+            {
+                if(-not $Prop.ContainsKey('Name') )
+                {
+                    if($Prop.ContainsKey($variation) )
+                    {
+                        $Prop.Add('Name',$Prop[$Variation])
+                    }
+                }
+            }
+            if(-not $Prop.ContainsKey('Name') -or $Prop['Name'] -like $null )
+            {
+                Throw "Property is missing a name`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}`nAffected property:`n$($Prop | out-string)"
+            }
+
+
+            if(-not $Prop.ContainsKey('Expression') )
+            {
+                if($Prop.ContainsKey('E') )
+                {
+                    $Prop.Add('Expression',$Prop['E'])
+                }
+            }
+            
+            if(-not $Prop.ContainsKey('Expression') -or $Prop['Expression'] -like $null )
+            {
+                Throw "Property is missing an expression`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}`nAffected property:`n$($Prop | out-string)"
+            }
+        }        
     }
 
     $leftHash = New-Object System.Collections.Specialized.OrderedDictionary
