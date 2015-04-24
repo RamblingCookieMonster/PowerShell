@@ -7,17 +7,24 @@
     .DESCRIPTION
         Join data from two sets of objects based on a common value
 
-        Left and Right object's properties should each be consistent, as we pull the property names from the first object in the array
+        For more details, see the accompanying blog post:
+            http://ramblingcookiemonster.github.io/Join-Object/
 
-        For more details, please see the original code and discussions that this borrows from:
+        For even more details,  see the original code and discussions that this borrows from:
             Dave Wyatt's Join-Object - http://powershell.org/wp/forums/topic/merging-very-large-collections
             Lucio Silveira's Join-Object - http://blogs.msdn.com/b/powershell/archive/2012/07/13/join-object.aspx
 
     .PARAMETER Left
-        'Left' collection of objects to join
+        'Left' collection of objects to join.  You can use the pipeline for Left.
+
+        The objects in this collection should be consistent.
+        We look at the properties on the first object for a baseline.
     
     .PARAMETER Right
-        'Right' collection of objects to join
+        'Right' collection of objects to join.
+
+        The objects in this collection should be consistent.
+        We look at the properties on the first object for a baseline.
 
     .PARAMETER LeftJoinProperty
         Property on Left collection objects that we match up with RightJoinProperty on the Right collection
@@ -26,7 +33,7 @@
         Property on Right collection objects that we match up with LeftJoinProperty on the Left collection
 
     .PARAMETER LeftProperties
-        One or more properties to keep from Left.  Default is to pull all Left properties (*).
+        One or more properties to keep from Left.  Default is to keep all Left properties (*).
 
         Each property can:
             - Be a plain property name like "Name"
@@ -39,7 +46,7 @@
                  Each property using this hashtable syntax will be excluded from suffixes and prefixes
 
     .PARAMETER RightProperties
-        One or more properties to keep from Right.  Default is to pull all Right properties (*).
+        One or more properties to keep from Right.  Default is to keep all Right properties (*).
 
         Each property can:
             - Be a plain property name like "Name"
@@ -68,7 +75,6 @@
             Resulting Joined Property Name  = 'Name_j'
 
     .PARAMETER Type
-
         Type of join.  Default is AllInLeft.
 
         AllInLeft will have all elements from Left at least once in the output, and might appear more than once
@@ -88,6 +94,7 @@
           SQL equivalent: full join
 
     .EXAMPLE
+        #
         #Define some input data.
 
         $l = 1..5 | Foreach-Object {
@@ -114,8 +121,8 @@
             # jsmith4 4/14/2015 3:27:22 PM Department 4
             # jsmith5 4/14/2015 3:27:22 PM Department 5
 
-    .EXAMPLE
-            
+    .EXAMPLE  
+        #
         #Define some input data.
 
         $l = 1..5 | Foreach-Object {
@@ -145,6 +152,7 @@
             # jsmith5 4/14/2015 3:27:22 PM Department 5 Department 5 jsmith5  
 
     .EXAMPLE
+        #
         #Hey!  You know how to script right?  Can you merge these two CSVs, where Path1's IP is equal to Path2's IP_ADDRESS?
         
         #Get CSV data
@@ -155,6 +163,20 @@
         Join-Object -Left $s1 -Right $s2 -LeftJoinProperty IP_ADDRESS -RightJoinProperty IP -Prefix 'j_' -Type AllInBoth |
             Export-CSV $MergePath -NoTypeInformation
 
+    .EXAMPLE
+        #
+        # "Hey Warren, we need to match up SSNs to Active Directory users, and check if they are enabled or not.
+        #  I'll e-mail you an unencrypted CSV with all the SSNs from gmail, what could go wrong?"
+        
+        # Import some SSNs. 
+        $SSNs = Import-CSV -Path D:\SSNs.csv
+
+        #Get AD users, and match up by a common value, samaccountname in this case:
+        Get-ADUser -Filter "samaccountname -like 'wframe*'" |
+            Join-Object -LeftJoinProperty samaccountname -Right $SSNs `
+                        -RightJoinProperty samaccountname -RightProperties ssn `
+                        -LeftProperties samaccountname, enabled, objectclass
+
     .NOTES
         This borrows from:
             Dave Wyatt's Join-Object - http://powershell.org/wp/forums/topic/merging-very-large-collections/
@@ -164,9 +186,7 @@
             Always display full set of properties
             Display properties in order (left first, right second)
             If specified, add suffix or prefix to right object property names to avoid collisions
-
-        TODO:
-            Testing, tweaking.
+            Use a hashtable rather than ordereddictionary (avoid case sensitivity)
 
     .LINK
         http://ramblingcookiemonster.github.io/Join-Object/
@@ -326,8 +346,8 @@
             }        
         }
 
-        $leftHash = New-Object System.Collections.Specialized.OrderedDictionary
-        $rightHash = New-Object System.Collections.Specialized.OrderedDictionary
+        $leftHash = @{}
+        $rightHash = @{}
 
         # Hashtable keys can't be null; we'll use any old object reference as a placeholder if needed.
         $nullKey = New-Object psobject
