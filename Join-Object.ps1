@@ -114,7 +114,6 @@
             # jsmith4 4/14/2015 3:27:22 PM Department 4
             # jsmith5 4/14/2015 3:27:22 PM Department 5
 
-
     .EXAMPLE
             
         #Define some input data.
@@ -135,7 +134,7 @@
         }
 
         #We have a name and Birthday for each manager, how do we find all related department data, even if there are conflicting properties?
-        Join-Object -Left $l -Right $r -LeftJoinProperty Name -RightJoinProperty Manager -Type AllInLeft -Prefix j_
+        $l | Join-Object -Right $r -LeftJoinProperty Name -RightJoinProperty Manager -Type AllInLeft -Prefix j_
 
             # Name    Birthday             j_Department j_Name       j_Manager
             # ----    --------             ------------ ------       ---------
@@ -179,7 +178,8 @@
     [CmdletBinding()]
     Param
     (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,
+                   ValueFromPipeLine = $true)]
         [object[]] $Left,
 
         # List to join with $Left
@@ -205,245 +205,270 @@
         [string]$Prefix,
         [string]$Suffix
     )
-
-    function AddItemProperties($item, $properties, $hash)
+    Begin
     {
-        if ($null -eq $item)
+        function AddItemProperties($item, $properties, $hash)
         {
-            return
-        }
-
-        foreach($property in $properties)
-        {
-            $propertyHash = $property -as [hashtable]
-            if($null -ne $propertyHash)
+            if ($null -eq $item)
             {
-                $hashName = $propertyHash["name"] -as [string]         
-                $expression = $propertyHash["expression"] -as [scriptblock]
-
-                $expressionValue = $expression.Invoke($item)[0]
-            
-                $hash[$hashName] = $expressionValue
+                return
             }
-            else
+
+            foreach($property in $properties)
             {
-                foreach($itemProperty in $item.psobject.Properties)
+                $propertyHash = $property -as [hashtable]
+                if($null -ne $propertyHash)
                 {
-                    if ($itemProperty.Name -like $property)
+                    $hashName = $propertyHash["name"] -as [string]         
+                    $expression = $propertyHash["expression"] -as [scriptblock]
+
+                    $expressionValue = $expression.Invoke($item)[0]
+            
+                    $hash[$hashName] = $expressionValue
+                }
+                else
+                {
+                    foreach($itemProperty in $item.psobject.Properties)
                     {
-                        $hash[$itemProperty.Name] = $itemProperty.Value
+                        if ($itemProperty.Name -like $property)
+                        {
+                            $hash[$itemProperty.Name] = $itemProperty.Value
+                        }
                     }
                 }
             }
         }
-    }
 
-    function TranslateProperties
-    {
-        [cmdletbinding()]
-        param(
-            [object[]]$Properties,
-            [psobject]$RealObject,
-            [string]$Side)
-
-        foreach($Prop in $Properties)
+        function TranslateProperties
         {
-            $propertyHash = $Prop -as [hashtable]
-            if($null -ne $propertyHash)
-            {
-                $hashName = $propertyHash["name"] -as [string]         
-                $expression = $propertyHash["expression"] -as [scriptblock]
+            [cmdletbinding()]
+            param(
+                [object[]]$Properties,
+                [psobject]$RealObject,
+                [string]$Side)
 
-                $ScriptString = $expression.tostring()
-                if($ScriptString -notmatch 'param\(')
+            foreach($Prop in $Properties)
+            {
+                $propertyHash = $Prop -as [hashtable]
+                if($null -ne $propertyHash)
                 {
-                    Write-Verbose "Property '$HashName'`: Adding param(`$_) to scriptblock '$ScriptString'"
-                    $Expression = [ScriptBlock]::Create("param(`$_)`n $ScriptString")
-                }
+                    $hashName = $propertyHash["name"] -as [string]         
+                    $expression = $propertyHash["expression"] -as [scriptblock]
+
+                    $ScriptString = $expression.tostring()
+                    if($ScriptString -notmatch 'param\(')
+                    {
+                        Write-Verbose "Property '$HashName'`: Adding param(`$_) to scriptblock '$ScriptString'"
+                        $Expression = [ScriptBlock]::Create("param(`$_)`n $ScriptString")
+                    }
                 
-                $Output = @{Name =$HashName; Expression = $Expression }
-                Write-Verbose "Found $Side property hash with name $($Output.Name), expression:`n$($Output.Expression | out-string)"
-                $Output
+                    $Output = @{Name =$HashName; Expression = $Expression }
+                    Write-Verbose "Found $Side property hash with name $($Output.Name), expression:`n$($Output.Expression | out-string)"
+                    $Output
+                }
+                else
+                {
+                    foreach($ThisProp in $RealObject.psobject.Properties)
+                    {
+                        if ($ThisProp.Name -like $Prop)
+                        {
+                            Write-Verbose "Found $Side property '$($ThisProp.Name)'"
+                            $ThisProp.Name
+                        }
+                    }
+                }
+            }
+        }
+
+        function WriteJoinObjectOutput($leftItem, $rightItem, $leftProperties, $rightProperties)
+        {
+            $properties = @{}
+
+            AddItemProperties $leftItem $leftProperties $properties
+            AddItemProperties $rightItem $rightProperties $properties
+
+            New-Object psobject -Property $properties
+        }
+
+        #Translate variations on calculated properties.  Doing this once shouldn't affect perf too much.
+        foreach($Prop in @($LeftProperties + $RightProperties))
+        {
+            if($Prop -as [hashtable])
+            {
+                foreach($variation in ('n','label','l'))
+                {
+                    if(-not $Prop.ContainsKey('Name') )
+                    {
+                        if($Prop.ContainsKey($variation) )
+                        {
+                            $Prop.Add('Name',$Prop[$Variation])
+                        }
+                    }
+                }
+                if(-not $Prop.ContainsKey('Name') -or $Prop['Name'] -like $null )
+                {
+                    Throw "Property is missing a name`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}`nAffected property:`n$($Prop | out-string)"
+                }
+
+
+                if(-not $Prop.ContainsKey('Expression') )
+                {
+                    if($Prop.ContainsKey('E') )
+                    {
+                        $Prop.Add('Expression',$Prop['E'])
+                    }
+                }
+            
+                if(-not $Prop.ContainsKey('Expression') -or $Prop['Expression'] -like $null )
+                {
+                    Throw "Property is missing an expression`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}`nAffected property:`n$($Prop | out-string)"
+                }
+            }        
+        }
+
+        $leftHash = New-Object System.Collections.Specialized.OrderedDictionary
+        $rightHash = New-Object System.Collections.Specialized.OrderedDictionary
+
+        # Hashtable keys can't be null; we'll use any old object reference as a placeholder if needed.
+        $nullKey = New-Object psobject
+        
+        $bound = $PSBoundParameters.keys -contains "InputObject"
+        if(-not $bound)
+        {
+            [System.Collections.ArrayList]$LeftData = @()
+        }
+    }
+    Process
+    {
+        #We pull all the data for comparison later, no streaming
+        if($bound)
+        {
+            $LeftData = $Left
+        }
+        Else
+        {
+            foreach($Object in $Left)
+            {
+                [void]$LeftData.add($Object)
+            }
+        }
+    }
+    End
+    {
+        foreach ($item in $Right)
+        {
+            $key = $item.$RightJoinProperty
+
+            if ($null -eq $key)
+            {
+                $key = $nullKey
+            }
+
+            $bucket = $rightHash[$key]
+
+            if ($null -eq $bucket)
+            {
+                $bucket = New-Object System.Collections.ArrayList
+                $rightHash.Add($key, $bucket)
+            }
+
+            $null = $bucket.Add($item)
+        }
+
+        foreach ($item in $LeftData)
+        {
+            $key = $item.$LeftJoinProperty
+
+            if ($null -eq $key)
+            {
+                $key = $nullKey
+            }
+
+            $bucket = $leftHash[$key]
+
+            if ($null -eq $bucket)
+            {
+                $bucket = New-Object System.Collections.ArrayList
+                $leftHash.Add($key, $bucket)
+            }
+
+            $null = $bucket.Add($item)
+        }
+
+        $LeftProperties = TranslateProperties -Properties $LeftProperties -Side 'Left' -RealObject $LeftData[0]
+        $RightProperties = TranslateProperties -Properties $RightProperties -Side 'Right' -RealObject $Right[0]
+
+        #I prefer ordered output. Left properties first.
+        [string[]]$AllProps = $LeftProperties
+
+        #Handle prefixes, suffixes, and building AllProps with Name only
+        $RightProperties = foreach($RightProp in $RightProperties)
+        {
+            if(-not ($RightProp -as [Hashtable]))
+            {
+                Write-Verbose "Transforming property $RightProp to $Prefix$RightProp$Suffix"
+                @{
+                    Name="$Prefix$RightProp$Suffix"
+                    Expression=[scriptblock]::create("param(`$_) `$_.$RightProp")
+                }
+                $AllProps += "$Prefix$RightProp$Suffix"
             }
             else
             {
-                foreach($ThisProp in $RealObject.psobject.Properties)
+                Write-Verbose "Skipping transformation of calculated property with name $($RightProp.Name), expression:`n$($RightProp.Expression | out-string)"
+                $AllProps += [string]$RightProp["Name"]
+                $RightProp
+            }
+        }
+
+        $AllProps = $AllProps | Select -Unique
+
+        Write-Verbose "Combined set of properties: $($AllProps -join ', ')"
+
+        foreach ( $entry in $leftHash.GetEnumerator() )
+        {
+            $key = $entry.Key
+            $leftBucket = $entry.Value
+
+            $rightBucket = $rightHash[$key]
+
+            if ($null -eq $rightBucket)
+            {
+                if ($Type -eq 'AllInLeft' -or $Type -eq 'AllInBoth')
                 {
-                    if ($ThisProp.Name -like $Prop)
+                    foreach ($leftItem in $leftBucket)
                     {
-                        Write-Verbose "Found $Side property '$($ThisProp.Name)'"
-                        $ThisProp.Name
+                        WriteJoinObjectOutput $leftItem $null $LeftProperties $RightProperties | Select $AllProps
                     }
                 }
             }
-        }
-    }
-
-    function WriteJoinObjectOutput($leftItem, $rightItem, $leftProperties, $rightProperties)
-    {
-        $properties = @{}
-
-        AddItemProperties $leftItem $leftProperties $properties
-        AddItemProperties $rightItem $rightProperties $properties
-
-        New-Object psobject -Property $properties
-    }
-
-    #Translate variations on calculated properties.  Doing this once shouldn't affect perf too much.
-    foreach($Prop in @($LeftProperties + $RightProperties))
-    {
-        if($Prop -as [hashtable])
-        {
-            foreach($variation in ('n','label','l'))
-            {
-                if(-not $Prop.ContainsKey('Name') )
-                {
-                    if($Prop.ContainsKey($variation) )
-                    {
-                        $Prop.Add('Name',$Prop[$Variation])
-                    }
-                }
-            }
-            if(-not $Prop.ContainsKey('Name') -or $Prop['Name'] -like $null )
-            {
-                Throw "Property is missing a name`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}`nAffected property:`n$($Prop | out-string)"
-            }
-
-
-            if(-not $Prop.ContainsKey('Expression') )
-            {
-                if($Prop.ContainsKey('E') )
-                {
-                    $Prop.Add('Expression',$Prop['E'])
-                }
-            }
-            
-            if(-not $Prop.ContainsKey('Expression') -or $Prop['Expression'] -like $null )
-            {
-                Throw "Property is missing an expression`n. This should be in calculated property format, with a Name and an Expression:`n@{Name='Something';Expression={`$_.Something}}`nAffected property:`n$($Prop | out-string)"
-            }
-        }        
-    }
-
-    $leftHash = New-Object System.Collections.Specialized.OrderedDictionary
-    $rightHash = New-Object System.Collections.Specialized.OrderedDictionary
-
-    # Hashtable keys can't be null; we'll use any old object reference as a placeholder if needed.
-    $nullKey = New-Object psobject
-
-    foreach ($item in $Left)
-    {
-        $key = $item.$LeftJoinProperty
-
-        if ($null -eq $key)
-        {
-            $key = $nullKey
-        }
-
-        $bucket = $leftHash[$key]
-
-        if ($null -eq $bucket)
-        {
-            $bucket = New-Object System.Collections.ArrayList
-            $leftHash.Add($key, $bucket)
-        }
-
-        $null = $bucket.Add($item)
-    }
-
-    foreach ($item in $Right)
-    {
-        $key = $item.$RightJoinProperty
-
-        if ($null -eq $key)
-        {
-            $key = $nullKey
-        }
-
-        $bucket = $rightHash[$key]
-
-        if ($null -eq $bucket)
-        {
-            $bucket = New-Object System.Collections.ArrayList
-            $rightHash.Add($key, $bucket)
-        }
-
-        $null = $bucket.Add($item)
-    }
-
-    $LeftProperties = TranslateProperties -Properties $LeftProperties -Side 'Left' -RealObject $Left[0]
-    $RightProperties = TranslateProperties -Properties $RightProperties -Side 'Right' -RealObject $Right[0]
-
-    #I prefer ordered output. Left properties first.
-    [string[]]$AllProps = $LeftProperties
-
-    #Handle prefixes, suffixes, and building AllProps with Name only
-    $RightProperties = foreach($RightProp in $RightProperties)
-    {
-        if(-not ($RightProp -as [Hashtable]))
-        {
-            Write-Verbose "Transforming property $RightProp to $Prefix$RightProp$Suffix"
-            @{
-                Name="$Prefix$RightProp$Suffix"
-                Expression=[scriptblock]::create("param(`$_) `$_.$RightProp")
-            }
-            $AllProps += "$Prefix$RightProp$Suffix"
-        }
-        else
-        {
-            Write-Verbose "Skipping transformation of calculated property with name $($RightProp.Name), expression:`n$($RightProp.Expression | out-string)"
-            $AllProps += [string]$RightProp["Name"]
-            $RightProp
-        }
-    }
-
-    $AllProps = $AllProps | Select -Unique
-
-    Write-Verbose "Combined set of properties: $($AllProps -join ', ')"
-
-    foreach ( $entry in $leftHash.GetEnumerator() )
-    {
-        $key = $entry.Key
-        $leftBucket = $entry.Value
-
-        $rightBucket = $rightHash[$key]
-
-        if ($null -eq $rightBucket)
-        {
-            if ($Type -eq 'AllInLeft' -or $Type -eq 'AllInBoth')
+            else
             {
                 foreach ($leftItem in $leftBucket)
                 {
-                    WriteJoinObjectOutput $leftItem $null $LeftProperties $RightProperties | Select $AllProps
+                    foreach ($rightItem in $rightBucket)
+                    {
+                        WriteJoinObjectOutput $leftItem $rightItem $LeftProperties $RightProperties | Select $AllProps
+                    }
                 }
             }
         }
-        else
+
+        if ($Type -eq 'AllInRight' -or $Type -eq 'AllInBoth')
         {
-            foreach ($leftItem in $leftBucket)
+            foreach ($entry in $rightHash.GetEnumerator())
             {
-                foreach ($rightItem in $rightBucket)
+                $key = $entry.Key
+                $rightBucket = $entry.Value
+
+                $leftBucket = $leftHash[$key]
+
+                if ($null -eq $leftBucket)
                 {
-                    WriteJoinObjectOutput $leftItem $rightItem $LeftProperties $RightProperties | Select $AllProps
-                }
-            }
-        }
-    }
-
-    if ($Type -eq 'AllInRight' -or $Type -eq 'AllInBoth')
-    {
-        foreach ($entry in $rightHash.GetEnumerator())
-        {
-            $key = $entry.Key
-            $rightBucket = $entry.Value
-
-            $leftBucket = $leftHash[$key]
-
-            if ($null -eq $leftBucket)
-            {
-                foreach ($rightItem in $rightBucket)
-                {
-                    WriteJoinObjectOutput $null $rightItem $LeftProperties $RightProperties | Select $AllProps
+                    foreach ($rightItem in $rightBucket)
+                    {
+                        WriteJoinObjectOutput $null $rightItem $LeftProperties $RightProperties | Select $AllProps
+                    }
                 }
             }
         }
