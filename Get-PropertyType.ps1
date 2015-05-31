@@ -106,6 +106,8 @@
                     Where-Object{ -not $excludeProperty -or $excludeProperty -notcontains $_ }
             }
         } #Get-PropertyOrder
+
+        $Output = @{}
     }
 
     Process {
@@ -118,10 +120,7 @@
 
             #loop through every property in this one object
             foreach($prop in $props){
-        
-                #set up a variable name we will use to store an array of unique types for this property
-                $varName = "_My$prop"
-            
+                   
                 #try to get the property type.  If it's null, say so
                 Try{
                     $type = $obj.$prop.gettype().FullName
@@ -130,35 +129,27 @@
                     $type = $null
                 }
 
-                #init currentvalue to null, might not need this
-                $currentValue = $null
+                #check to see if we already have types for this prop
+                if(-not $Output.ContainsKey($prop)){
 
-                #check to see if we already have an array of types for this property.  Set current value in the logic
-                if(-not ($currentValue = Get-Variable $varName -ErrorAction SilentlyContinue -ValueOnly)){
-
-                    #we don't have an array yet.  Start one, put the type in it, give it a description we can use later
+                    #we don't have an array yet.  Start one, put the type in it
                     $List = New-Object System.Collections.ArrayList
                     [void]$List.Add($type)
-                    Set-Variable -name $varName -value $List -force -Description "_MyProp"
+                    $Output.Add($prop, $List)
             
                 }
                 else{
-                    if($currentValue -notcontains $type){
+                    if($Output[$prop] -notcontains $type){
                     
                         #type isn't in the array yet, add it
-                        [void]$currentValue.Add($type)
-                        Set-Variable -name $varName -Value $currentValue -force -Description "_MyProp"
+                        [void]$output[$prop].Add($type)
                     }
                 }
             }
         }
     }
     End {
-
-        #get all the results, remove _My from their name
-        Get-Variable -Scope 0 |
-            Where-Object {$_.Description -eq "_MyProp"} |
-            Select-Object -Property @{ label = "Name"; expression = {$_.name -replace "^_My",""} }, Value
-
+        
+        $Output
     }
 }
