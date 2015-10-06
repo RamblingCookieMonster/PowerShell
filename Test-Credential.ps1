@@ -75,7 +75,12 @@
         }
         
         #create principal context with appropriate context from param. If either comp or domain is null, thread's user's domain or local machine are used
-        if ($PSCmdlet.ParameterSetName -eq 'Domain')
+        if ($Context -eq 'ApplicationDirectory' )
+        {
+            #Name=$null works for machine/domain, not applicationdirectory
+            $DS = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::$Context)
+        }
+        elseif ($PSCmdlet.ParameterSetName -eq 'Domain')
         {
             $Context = $PSCmdlet.ParameterSetName
             $DS = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::$Context, $Domain)
@@ -85,11 +90,7 @@
             $Context = $PSCmdlet.ParameterSetName
             $DS = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::$Context, $ComputerName)
         }
-        elseif ($Context -eq 'ApplicationDirectory' )
-        {
-            #Name=$null works for machine/domain, not applicationdirectory
-            $DS = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::$Context)
-        }
+
     }
     Process
     {
