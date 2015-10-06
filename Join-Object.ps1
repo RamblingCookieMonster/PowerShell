@@ -429,7 +429,7 @@
                 Write-Verbose "Transforming property $RightProp to $Prefix$RightProp$Suffix"
                 @{
                     Name="$Prefix$RightProp$Suffix"
-                    Expression=[scriptblock]::create("param(`$_) `$_.$RightProp")
+                    Expression=[scriptblock]::create("param(`$_) `$_.'$RightProp'")
                 }
                 $AllProps += "$Prefix$RightProp$Suffix"
             }
