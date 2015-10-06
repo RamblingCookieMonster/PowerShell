@@ -37,6 +37,13 @@
         #Test credential for a local account
         Test-Credential -ComputerName SomeComputer -Credential $cred
 
+    .EXAMPLE
+        #I provide my AD account credentials for domain2
+        $cred = get-credential
+
+        #Test credential for an active directory account
+        Test-Credential -Credential $cred -Domain domain2.com
+
     .FUNCTIONALITY
         Active Directory
 
