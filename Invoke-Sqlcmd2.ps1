@@ -356,13 +356,13 @@
         }
 
         #Handle existing connections
-        if($PSBoundParameters.Keys -contains "SQLConnection")
+        if($PSBoundParameters.ContainsKey('SQLConnection'))
         {
-
             if($SQLConnection.State -notlike "Open")
             {
                 Try
                 {
+                    Write-Verbose "Opening connection from '$($SQLConnection.State)' state"
                     $SQLConnection.Open()
                 }
                 Catch
@@ -375,6 +375,7 @@
             {
                 Try
                 {
+                    Write-Verbose "Changing SQLConnection database from '$($SQLConnection.Database)' to $Database"
                     $SQLConnection.ChangeDatabase($Database)
                 }
                 Catch
@@ -419,7 +420,6 @@
                 $conn.ConnectionString = $ConnectionString 
                 Write-Debug "ConnectionString $ConnectionString"
 
-
                 Try
                 {
                     $conn.Open() 
@@ -439,7 +439,6 @@
                 $conn.add_InfoMessage($handler) 
             }
     
-
             $cmd = New-Object system.Data.SqlClient.SqlCommand($Query,$conn) 
             $cmd.CommandTimeout=$QueryTimeout
 
@@ -460,12 +459,18 @@
             Try
             {
                 [void]$da.fill($ds)
-                $conn.Close()
+                if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
+                {
+                    $conn.Close()
+                }
             }
             Catch
             { 
                 $Err = $_
-                $conn.Close()
+                if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
+                {
+                    $conn.Close()
+                }
 
                 switch ($ErrorActionPreference.tostring())
                 {
