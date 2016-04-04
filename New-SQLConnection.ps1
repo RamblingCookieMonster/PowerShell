@@ -20,6 +20,9 @@
         
         SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
     
+    .PARAMETER Encrypt
+        If specified, will request that the connection to the SQL is done over SSL. This requires that the SQL Server has been set up to accept SSL requests. For information regarding setting up SSL on SQL Server, visit this link: https://technet.microsoft.com/en-us/library/ms189067(v=sql.105).aspx
+
     .PARAMETER ConnectionTimeout
         Specifies the number of seconds when New-SQLConnection times out if it cannot successfully connect to an instance of the Database Engine. The timeout value must be an integer between 0 and 65534. If 0 is specified, connection attempts do not time out.
     
@@ -67,12 +70,18 @@
 
         [Parameter( Position=3,
                     Mandatory=$false,
+                    ValueFromRemainingArguments=$false)]
+        [switch]
+        $Encrypt,
+
+        [Parameter( Position=4,
+                    Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
         [Int32]
         $ConnectionTimeout=15,
 
-        [Parameter( Position=4,
+        [Parameter( Position=5,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
@@ -87,7 +96,7 @@
 
             if ($Credential) 
             {
-                $ConnectionString = "Server={0};Database={1};User ID={2};Password={3};Trusted_Connection=False;Connect Timeout={4}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout
+                $ConnectionString = "Server={0};Database={1};User ID={2};Password={3};Trusted_Connection=False;Connect Timeout={4};Encrypt={5}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout,$Encrypt
             }
             else 
             {

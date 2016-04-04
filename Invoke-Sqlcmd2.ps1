@@ -31,6 +31,9 @@
         
         SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
 
+    .PARAMETER Encrypt
+        If specified, will request that the connection to the SQL is done over SSL. This requires that the SQL Server has been set up to accept SSL requests. For information regarding setting up SSL on SQL Server, visit this link: https://technet.microsoft.com/en-us/library/ms189067(v=sql.105).aspx
+
     .PARAMETER QueryTimeout
         Specifies the number of seconds before the queries time out.
 
@@ -240,7 +243,18 @@
         [System.Management.Automation.PSCredential]
         $Credential,
 
-        [Parameter( Position=4,
+        [Parameter( ParameterSetName='Ins-Que',
+                    Position=4,
+                    Mandatory=$false,
+                    ValueFromRemainingArguments=$false)]
+        [Parameter( ParameterSetName='Ins-Fil',
+                    Position=4,
+                    Mandatory=$false,
+                    ValueFromRemainingArguments=$false)]
+        [switch]
+        $Encrypt,
+
+        [Parameter( Position=5,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
@@ -248,19 +262,19 @@
         $QueryTimeout=600,
     
         [Parameter( ParameterSetName='Ins-Fil',
-                    Position=5,
+                    Position=6,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
         [Parameter( ParameterSetName='Ins-Que',
-                    Position=5,
+                    Position=6,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
         [Int32]
         $ConnectionTimeout=15,
     
-        [Parameter( Position=6,
+        [Parameter( Position=7,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
@@ -268,26 +282,26 @@
         [string]
         $As="DataRow",
     
-        [Parameter( Position=7,
+        [Parameter( Position=8,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
                     ValueFromRemainingArguments=$false )]
         [System.Collections.IDictionary]
         $SqlParameters,
 
-        [Parameter( Position=8,
+        [Parameter( Position=9,
                     Mandatory=$false )]
         [switch]
         $AppendServerInstance,
 
         [Parameter( ParameterSetName = 'Con-Que',
-                    Position=9,
+                    Position=10,
                     Mandatory=$false,
                     ValueFromPipeline=$false,
                     ValueFromPipelineByPropertyName=$false,
                     ValueFromRemainingArguments=$false )]
         [Parameter( ParameterSetName = 'Con-Fil',
-                    Position=9,
+                    Position=10,
                     Mandatory=$false,
                     ValueFromPipeline=$false,
                     ValueFromPipelineByPropertyName=$false,
@@ -409,7 +423,7 @@
             {
                 if ($Credential) 
                 {
-                    $ConnectionString = "Server={0};Database={1};User ID={2};Password=`"{3}`";Trusted_Connection=False;Connect Timeout={4}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout
+                    $ConnectionString = "Server={0};Database={1};User ID={2};Password=`"{3}`";Trusted_Connection=False;Connect Timeout={4};Encrypt={5}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout,$Encrypt
                 }
                 else 
                 {
