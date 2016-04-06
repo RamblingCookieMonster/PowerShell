@@ -1,12 +1,12 @@
-﻿function Invoke-Sqlcmd2 
+﻿function Invoke-Sqlcmd2
 {
-    <# 
-    .SYNOPSIS 
-        Runs a T-SQL script. 
+    <#
+    .SYNOPSIS
+        Runs a T-SQL script.
 
-    .DESCRIPTION 
+    .DESCRIPTION
         Runs a T-SQL script. Invoke-Sqlcmd2 only returns message output, such as the output of PRINT statements when -verbose parameter is specified.
-        Paramaterized queries are supported. 
+        Paramaterized queries are supported.
 
         Help details below borrowed from Invoke-Sqlcmd
 
@@ -26,9 +26,9 @@
 
     .PARAMETER Credential
         Specifies A PSCredential for SQL Server Authentication connection to an instance of the Database Engine.
-        
+
         If -Credential is not specified, Invoke-Sqlcmd attempts a Windows Authentication connection using the Windows account running the PowerShell session.
-        
+
         SECURITY NOTE: If you use the -Debug switch, the connectionstring including plain text password will be sent to the debug stream.
 
     .PARAMETER Encrypt
@@ -41,7 +41,7 @@
         Specifies the number of seconds when Invoke-Sqlcmd2 times out if it cannot successfully connect to an instance of the Database Engine. The timeout value must be an integer between 0 and 65534. If 0 is specified, connection attempts do not time out.
 
     .PARAMETER As
-        Specifies output type - DataSet, DataTable, array of DataRow, PSObject or Single Value 
+        Specifies output type - DataSet, DataTable, array of DataRow, PSObject or Single Value
 
         PSObject output introduces overhead but adds flexibility for working with results: http://powershell.org/wp/forums/topic/dealing-with-dbnull/
 
@@ -59,9 +59,9 @@
         If specified, use an existing SQLConnection.
             We attempt to open this connection if it is closed
 
-    .INPUTS 
-        None 
-            You cannot pipe objects to Invoke-Sqlcmd2 
+    .INPUTS
+        None
+            You cannot pipe objects to Invoke-Sqlcmd2
 
     .OUTPUTS
        As PSObject:     System.Management.Automation.PSCustomObject
@@ -70,31 +70,31 @@
        As DataSet:      System.Data.DataTableCollectionSystem.Data.DataSet
        As SingleValue:  Dependent on data type in first column.
 
-    .EXAMPLE 
-        Invoke-Sqlcmd2 -ServerInstance "MyComputer\MyInstance" -Query "SELECT login_time AS 'StartTime' FROM sysprocesses WHERE spid = 1" 
-    
-        This example connects to a named instance of the Database Engine on a computer and runs a basic T-SQL query. 
-        StartTime 
-        ----------- 
-        2010-08-12 21:21:03.593 
+    .EXAMPLE
+        Invoke-Sqlcmd2 -ServerInstance "MyComputer\MyInstance" -Query "SELECT login_time AS 'StartTime' FROM sysprocesses WHERE spid = 1"
 
-    .EXAMPLE 
-        Invoke-Sqlcmd2 -ServerInstance "MyComputer\MyInstance" -InputFile "C:\MyFolder\tsqlscript.sql" | Out-File -filePath "C:\MyFolder\tsqlscript.rpt" 
-    
-        This example reads a file containing T-SQL statements, runs the file, and writes the output to another file. 
+        This example connects to a named instance of the Database Engine on a computer and runs a basic T-SQL query.
+        StartTime
+        -----------
+        2010-08-12 21:21:03.593
 
-    .EXAMPLE 
-        Invoke-Sqlcmd2  -ServerInstance "MyComputer\MyInstance" -Query "PRINT 'hello world'" -Verbose 
+    .EXAMPLE
+        Invoke-Sqlcmd2 -ServerInstance "MyComputer\MyInstance" -InputFile "C:\MyFolder\tsqlscript.sql" | Out-File -filePath "C:\MyFolder\tsqlscript.rpt"
 
-        This example uses the PowerShell -Verbose parameter to return the message output of the PRINT command. 
-        VERBOSE: hello world 
+        This example reads a file containing T-SQL statements, runs the file, and writes the output to another file.
+
+    .EXAMPLE
+        Invoke-Sqlcmd2  -ServerInstance "MyComputer\MyInstance" -Query "PRINT 'hello world'" -Verbose
+
+        This example uses the PowerShell -Verbose parameter to return the message output of the PRINT command.
+        VERBOSE: hello world
 
     .EXAMPLE
         Invoke-Sqlcmd2 -ServerInstance MyServer\MyInstance -Query "SELECT ServerName, VCNumCPU FROM tblServerInfo" -as PSObject | ?{$_.VCNumCPU -gt 8}
         Invoke-Sqlcmd2 -ServerInstance MyServer\MyInstance -Query "SELECT ServerName, VCNumCPU FROM tblServerInfo" -as PSObject | ?{$_.VCNumCPU}
 
         This example uses the PSObject output type to allow more flexibility when working with results.
-        
+
         If we used DataRow rather than PSObject, we would see the following behavior:
             Each row where VCNumCPU does not exist would produce an error in the first example
             Results would include rows where VCNumCPU has DBNull value in the second example
@@ -103,15 +103,15 @@
         'Instance1', 'Server1/Instance1', 'Server2' | Invoke-Sqlcmd2 -query "Sp_databases" -as psobject -AppendServerInstance
 
         This example lists databases for each instance.  It includes a column for the ServerInstance in question.
-            DATABASE_NAME          DATABASE_SIZE REMARKS        ServerInstance                                                     
-            -------------          ------------- -------        --------------                                                     
-            REDACTED                       88320                Instance1                                                      
-            master                         17920                Instance1                                                      
-            ...                                                                                              
-            msdb                          618112                Server1/Instance1                                                                                                              
+            DATABASE_NAME          DATABASE_SIZE REMARKS        ServerInstance
+            -------------          ------------- -------        --------------
+            REDACTED                       88320                Instance1
+            master                         17920                Instance1
+            ...
+            msdb                          618112                Server1/Instance1
             tempdb                        563200                Server1/Instance1
-            ...                                                     
-            OperationsManager           20480000                Server2                                                            
+            ...
+            OperationsManager           20480000                Server2
 
     .EXAMPLE
         #Construct a query using SQL parameters
@@ -119,36 +119,36 @@
 
         #Run the query, specifying values for SQL parameters
             Invoke-Sqlcmd2 -ServerInstance SomeServer\NamedInstance -Database ServerDB -query $query -SqlParameters @{ VCServerContact="%cookiemonster%"; VCServerClass="Prod" }
-            
-            ServerName    VCServerClass VCServerContact        
-            ----------    ------------- ---------------        
-            SomeServer1   Prod          cookiemonster, blah                 
-            SomeServer2   Prod          cookiemonster                 
-            SomeServer3   Prod          blah, cookiemonster                 
+
+            ServerName    VCServerClass VCServerContact
+            ----------    ------------- ---------------
+            SomeServer1   Prod          cookiemonster, blah
+            SomeServer2   Prod          cookiemonster
+            SomeServer3   Prod          blah, cookiemonster
 
     .EXAMPLE
-        Invoke-Sqlcmd2 -SQLConnection $Conn -Query "SELECT login_time AS 'StartTime' FROM sysprocesses WHERE spid = 1" 
-    
+        Invoke-Sqlcmd2 -SQLConnection $Conn -Query "SELECT login_time AS 'StartTime' FROM sysprocesses WHERE spid = 1"
+
         This example uses an existing SQLConnection and runs a basic T-SQL query against it
 
-        StartTime 
-        ----------- 
-        2010-08-12 21:21:03.593 
+        StartTime
+        -----------
+        2010-08-12 21:21:03.593
 
 
-    .NOTES 
-        Version History 
+    .NOTES
+        Version History
         poshcode.org - http://poshcode.org/4967
-        v1.0         - Chad Miller - Initial release 
-        v1.1         - Chad Miller - Fixed Issue with connection closing 
-        v1.2         - Chad Miller - Added inputfile, SQL auth support, connectiontimeout and output message handling. Updated help documentation 
-        v1.3         - Chad Miller - Added As parameter to control DataSet, DataTable or array of DataRow Output type 
+        v1.0         - Chad Miller - Initial release
+        v1.1         - Chad Miller - Fixed Issue with connection closing
+        v1.2         - Chad Miller - Added inputfile, SQL auth support, connectiontimeout and output message handling. Updated help documentation
+        v1.3         - Chad Miller - Added As parameter to control DataSet, DataTable or array of DataRow Output type
         v1.4         - Justin Dearing <zippy1981 _at_ gmail.com> - Added the ability to pass parameters to the query.
         v1.4.1       - Paul Bryson <atamido _at_ gmail.com> - Added fix to check for null values in parameterized queries and replace with [DBNull]
         v1.5         - Joel Bennett - add SingleValue output option
         v1.5.1       - RamblingCookieMonster - Added ParameterSets, set Query and InputFile to mandatory
         v1.5.2       - RamblingCookieMonster - Added DBNullToNull switch and code from Dave Wyatt. Added parameters to comment based help (need someone with SQL expertise to verify these)
-                 
+
         github.com   - https://github.com/RamblingCookieMonster/PowerShell
         v1.5.3       - RamblingCookieMonster - Replaced DBNullToNull param with PSObject Output option. Added credential support. Added pipeline support for ServerInstance.  Added to GitHub
                                              - Added AppendServerInstance switch.
@@ -202,7 +202,7 @@
                     ValueFromRemainingArguments=$false)]
         [string]
         $Database,
-    
+
         [Parameter( ParameterSetName='Ins-Que',
                     Position=2,
                     Mandatory=$true,
@@ -215,7 +215,7 @@
                     ValueFromRemainingArguments=$false )]
         [string]
         $Query,
-        
+
         [Parameter( ParameterSetName='Ins-Fil',
                     Position=2,
                     Mandatory=$true,
@@ -229,7 +229,7 @@
         [ValidateScript({ Test-Path $_ })]
         [string]
         $InputFile,
-        
+
         [Parameter( ParameterSetName='Ins-Que',
                     Position=3,
                     Mandatory=$false,
@@ -260,7 +260,7 @@
                     ValueFromRemainingArguments=$false )]
         [Int32]
         $QueryTimeout=600,
-    
+
         [Parameter( ParameterSetName='Ins-Fil',
                     Position=6,
                     Mandatory=$false,
@@ -273,7 +273,7 @@
                     ValueFromRemainingArguments=$false )]
         [Int32]
         $ConnectionTimeout=15,
-    
+
         [Parameter( Position=7,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
@@ -281,7 +281,7 @@
         [ValidateSet("DataSet", "DataTable", "DataRow","PSObject","SingleValue")]
         [string]
         $As="DataRow",
-    
+
         [Parameter( Position=8,
                     Mandatory=$false,
                     ValueFromPipelineByPropertyName=$true,
@@ -310,14 +310,14 @@
         [ValidateNotNullOrEmpty()]
         [System.Data.SqlClient.SQLConnection]
         $SQLConnection
-    ) 
+    )
 
     Begin
     {
-        if ($InputFile) 
-        { 
-            $filePath = $(Resolve-Path $InputFile).path 
-            $Query =  [System.IO.File]::ReadAllText("$filePath") 
+        if ($InputFile)
+        {
+            $filePath = $(Resolve-Path $InputFile).path
+            $Query =  [System.IO.File]::ReadAllText("$filePath")
         }
 
         Write-Verbose "Running Invoke-Sqlcmd2 with ParameterSet '$($PSCmdlet.ParameterSetName)'.  Performing query '$Query'"
@@ -421,22 +421,22 @@
             }
             else
             {
-                if ($Credential) 
+                if ($Credential)
                 {
                     $ConnectionString = "Server={0};Database={1};User ID={2};Password=`"{3}`";Trusted_Connection=False;Connect Timeout={4};Encrypt={5}" -f $SQLInstance,$Database,$Credential.UserName,$Credential.GetNetworkCredential().Password,$ConnectionTimeout,$Encrypt
                 }
-                else 
+                else
                 {
-                    $ConnectionString = "Server={0};Database={1};Integrated Security=True;Connect Timeout={2}" -f $SQLInstance,$Database,$ConnectionTimeout
-                } 
-            
+                    $ConnectionString = "Server={0};Database={1};Integrated Security=True;Connect Timeout={2};Encrypt={3}" -f $SQLInstance,$Database,$ConnectionTimeout,$Encrypt
+                }
+
                 $conn = New-Object System.Data.SqlClient.SQLConnection
-                $conn.ConnectionString = $ConnectionString 
+                $conn.ConnectionString = $ConnectionString
                 Write-Debug "ConnectionString $ConnectionString"
 
                 Try
                 {
-                    $conn.Open() 
+                    $conn.Open()
                 }
                 Catch
                 {
@@ -445,15 +445,15 @@
                 }
             }
 
-            #Following EventHandler is used for PRINT and RAISERROR T-SQL statements. Executed when -Verbose parameter specified by caller 
-            if ($PSBoundParameters.Verbose) 
-            { 
-                $conn.FireInfoMessageEventOnUserErrors=$true 
-                $handler = [System.Data.SqlClient.SqlInfoMessageEventHandler] { Write-Verbose "$($_)" } 
-                $conn.add_InfoMessage($handler) 
+            #Following EventHandler is used for PRINT and RAISERROR T-SQL statements. Executed when -Verbose parameter specified by caller
+            if ($PSBoundParameters.Verbose)
+            {
+                $conn.FireInfoMessageEventOnUserErrors=$true
+                $handler = [System.Data.SqlClient.SqlInfoMessageEventHandler] { Write-Verbose "$($_)" }
+                $conn.add_InfoMessage($handler)
             }
-    
-            $cmd = New-Object system.Data.SqlClient.SqlCommand($Query,$conn) 
+
+            $cmd = New-Object system.Data.SqlClient.SqlCommand($Query,$conn)
             $cmd.CommandTimeout=$QueryTimeout
 
             if ($SqlParameters -ne $null)
@@ -466,10 +466,10 @@
                         { $cmd.Parameters.AddWithValue($_.Key, [DBNull]::Value) }
                     } > $null
             }
-    
-            $ds = New-Object system.Data.DataSet 
-            $da = New-Object system.Data.SqlClient.SqlDataAdapter($cmd) 
-    
+
+            $ds = New-Object system.Data.DataSet
+            $da = New-Object system.Data.SqlClient.SqlDataAdapter($cmd)
+
             Try
             {
                 [void]$da.fill($ds)
@@ -479,7 +479,7 @@
                 }
             }
             Catch
-            { 
+            {
                 $Err = $_
                 if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
                 {
@@ -492,7 +492,7 @@
                     'Stop' {     Throw $Err }
                     'Continue' { Write-Error $Err}
                     Default {    Write-Error $Err}
-                }              
+                }
             }
 
             if($AppendServerInstance)
@@ -507,16 +507,16 @@
                 }
             }
 
-            switch ($As) 
-            { 
-                'DataSet' 
+            switch ($As)
+            {
+                'DataSet'
                 {
                     $ds
-                } 
+                }
                 'DataTable'
                 {
                     $ds.Tables
-                } 
+                }
                 'DataRow'
                 {
                     $ds.Tables[0]
