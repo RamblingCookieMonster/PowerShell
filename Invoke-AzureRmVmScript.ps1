@@ -22,6 +22,13 @@ function Invoke-AzureRmVmScript {
     .PARAMETER StorageAccountName
         Storage account to store the script we invoke
 
+    .PARAMETER StorageAccountKey
+        Optional storage account key to generate StorageContext
+
+        If not specified, we look one up via Get-AzureRmStorageAccountKey
+
+        Note that this is a string. Beware, given the sensitivity of this key
+
     .PARAMETER StorageContext
         Optional Azure storage context to use.  We build one if not provided
     
@@ -53,7 +60,7 @@ function Invoke-AzureRmVmScript {
         VMName = 'VM-22'
         StorageAccountName = 'storageaccountname'
     }
-    Invoke-AzureRmVmScript @params {
+    Invoke-AzureRmVmScript @params -ScriptBlock {
         "Hello world! Running on $(hostname)"
         Write-Error "This is an error"
         Write-Warning "This is a warning"
@@ -83,191 +90,235 @@ function Invoke-AzureRmVmScript {
     [cmdletbinding()]
     param(
         # todo: add various parameter niceties
+        [Parameter(Mandatory = $True,
+                   Position = 0,
+                   ValueFromPipelineByPropertyName = $True)]
         [string[]]$ResourceGroupName,
+        
+        [Parameter(Mandatory = $True,
+                   Position = 1,
+                   ValueFromPipelineByPropertyName = $True)]
         [string[]]$VMName,
-        [string]$StorageAccountName,
-        $StorageContext,
-        [string]$StorageContainer = 'scripts',
-        [string]$Filename = 'CustomScriptExtension.ps1',
-        [string]$ExtensionName = 'CustomScriptExtension',
+        
+        [Parameter(Mandatory = $True,
+                   Position = 2)]
         [scriptblock]$ScriptBlock, #todo: add file support.
+        
+        [Parameter(Mandatory = $True,
+                   Position = 3)]
+        [string]$StorageAccountName,
+
+        [string]$StorageAccountKey, #Maybe don't use string...
+
+        $StorageContext,
+        
+        [string]$StorageContainer = 'scripts',
+        
+        [string]$Filename, # Auto defined if not specified...
+        
+        [string]$ExtensionName, # Auto defined if not specified
+
         [switch]$ForceExtension,
         [switch]$ForceBlob,
         [switch]$Force
     )
-
-    if($Force)
+    begin
     {
-        $ForceExtension = $True
-        $ForceBlob = $True
-    }
-
-    Foreach($ResourceGroup in $ResourceGroupName)
-    {
-        Foreach($VM in $VMName)
+        if($Force)
         {
-            $CommonParams = @{
-                ResourceGroupName = $ResourceGroup
-                VMName = $VM
-            }
-
-            Write-Verbose "Working with ResourceGroup $ResourceGroup, VM $VM"
-            # Why would Get-AzureRMVmCustomScriptExtension support listing extensions regardless of name? /grumble
-            Try
+            $ForceExtension = $True
+            $ForceBlob = $True
+        }
+    }
+    process
+    {
+        Foreach($ResourceGroup in $ResourceGroupName)
+        {
+            Foreach($VM in $VMName)
             {
-                $AzureRmVM = Get-AzureRmVM @CommonParams -ErrorAction Stop
-                $AzureRmVMExtended = Get-AzureRmVM @CommonParams -Status -ErrorAction Stop
-            }
-            Catch
-            {
-                Write-Error $_
-                Write-Error "Failed to retrieve existing extension data for $VM"
-                continue
-            }
-
-            # Handle existing extensions
-            Write-Verbose "Checking for existing extensions on VM '$VM' in resource group '$ResourceGroup'"
-            $Extensions = $null
-            $Extensions = @( $AzureRmVMExtended.Extensions | Where {$_.Type -like 'Microsoft.Compute.CustomScriptExtension'} )
-            if($Extensions.count -gt 0)
-            {
-                Write-Verbose "Found extensions on $VM`:`n$($Extensions | Format-List | Out-String)"
-                if(-not $ForceExtension)
+                if(-not $Filename)
                 {
-                    Write-Warning "Found CustomScriptExtension '$($Extensions.Name)' on VM '$VM' in Resource Group '$ResourceGroup'.`n Use -ForceExtension or -Force to remove this"
-                    continue
+                    $GUID = [GUID]::NewGuid().Guid -replace "-", "_"
+                    $FileName = "$GUID.ps1"
                 }
+                if(-not $ExtensionName)
+                {
+                    $ExtensionName = $Filename -replace '.ps1', ''
+                }
+
+                $CommonParams = @{
+                    ResourceGroupName = $ResourceGroup
+                    VMName = $VM
+                }
+
+                Write-Verbose "Working with ResourceGroup $ResourceGroup, VM $VM"
+                # Why would Get-AzureRMVmCustomScriptExtension support listing extensions regardless of name? /grumble
                 Try
                 {
-                    # Theoretically can only be one, so... no looping, just remove.
-                    $Output = Remove-AzureRmVMCustomScriptExtension @CommonParams -Name $Extensions.Name -Force -ErrorAction Stop
-                    if($Output.StatusCode -notlike 'OK')
-                    {
-                        Write-Warning "Remove-AzureRmVMCustomScriptExtension output seems off:`n$($Output | Format-List | Out-String)"
-                    }
+                    $AzureRmVM = Get-AzureRmVM @CommonParams -ErrorAction Stop
+                    $AzureRmVMExtended = Get-AzureRmVM @CommonParams -Status -ErrorAction Stop
                 }
                 Catch
                 {
                     Write-Error $_
-                    Write-Error "Failed to remove existing extension $($Extensions.Name) for VM '$VM' in ResourceGroup '$ResourceGroup'"
+                    Write-Error "Failed to retrieve existing extension data for $VM"
                     continue
                 }
-            }
 
-            # Upload the script
-            Write-Verbose "Uploading script to storage account $StorageAccountName"
-            if(-not $StorageContainer)
-            {
-                $StorageContainer = 'scripts'
-            }
-            if(-not $Filename)
-            {
-                $Filename = 'CustomScriptExtension.ps1'
-            }
-            if(-not $StorageContext)
-            {
-                if(-not $StorageAccountKey)
+                # Handle existing extensions
+                Write-Verbose "Checking for existing extensions on VM '$VM' in resource group '$ResourceGroup'"
+                $Extensions = $null
+                $Extensions = @( $AzureRmVMExtended.Extensions | Where {$_.Type -like 'Microsoft.Compute.CustomScriptExtension'} )
+                if($Extensions.count -gt 0)
                 {
+                    Write-Verbose "Found extensions on $VM`:`n$($Extensions | Format-List | Out-String)"
+                    if(-not $ForceExtension)
+                    {
+                        Write-Warning "Found CustomScriptExtension '$($Extensions.Name)' on VM '$VM' in Resource Group '$ResourceGroup'.`n Use -ForceExtension or -Force to remove this"
+                        continue
+                    }
                     Try
                     {
-                        $StorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $ResourceGroup -Name $storageAccountName -ErrorAction Stop)[0].value
+                        # Theoretically can only be one, so... no looping, just remove.
+                        $Output = Remove-AzureRmVMCustomScriptExtension @CommonParams -Name $Extensions.Name -Force -ErrorAction Stop
+                        if($Output.StatusCode -notlike 'OK')
+                        {
+                            Throw "Remove-AzureRmVMCustomScriptExtension output seems off:`n$($Output | Format-List | Out-String)"
+                        }
                     }
                     Catch
                     {
                         Write-Error $_
-                        Write-Error "Failed to obtain Storage Account Key for storage account '$StorageAccountName' in Resource Group '$ResourceGroup' for VM '$VM'"
+                        Write-Error "Failed to remove existing extension $($Extensions.Name) for VM '$VM' in ResourceGroup '$ResourceGroup'"
                         continue
                     }
                 }
+
+                # Upload the script
+                Write-Verbose "Uploading script to storage account $StorageAccountName"
+                if(-not $StorageContainer)
+                {
+                    $StorageContainer = 'scripts'
+                }
+                if(-not $Filename)
+                {
+                    $Filename = 'CustomScriptExtension.ps1'
+                }
+                if(-not $StorageContext)
+                {
+                    if(-not $StorageAccountKey)
+                    {
+                        Try
+                        {
+                            $StorageAccountKey = (Get-AzureRmStorageAccountKey -ResourceGroupName $ResourceGroup -Name $storageAccountName -ErrorAction Stop)[0].value
+                        }
+                        Catch
+                        {
+                            Write-Error $_
+                            Write-Error "Failed to obtain Storage Account Key for storage account '$StorageAccountName' in Resource Group '$ResourceGroup' for VM '$VM'"
+                            continue
+                        }
+                    }
+                    Try
+                    {
+                        $StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+                    }
+                    Catch
+                    {
+                        Write-Error $_
+                        Write-Error "Failed to generate storage context for storage account '$StorageAccountName' in Resource Group '$ResourceGroup' for VM '$VM'"
+                        continue
+                    }
+                }
+        
                 Try
                 {
-                    $StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $StorageAccountKey
+                    $Script = $ScriptBlock.ToString()
+                    $LocalFile = [System.IO.Path]::GetTempFileName()
+                    Start-Sleep -Milliseconds 500 #This might not be needed
+                    Set-Content $LocalFile -Value $Script -ErrorAction Stop
+            
+                    $params = @{
+                        Container = $StorageContainer
+                        Context = $StorageContext
+                    }
+
+                    $Existing = $Null
+                    $Existing = @( Get-AzureStorageBlob @params -ErrorAction Stop )
+
+                    if($Existing.Name -contains $Filename -and -not $ForceBlob)
+                    {
+                        Write-Warning "Found blob '$FileName' in container '$StorageContainer'.`n Use -ForceBlob or -Force to overwrite this"
+                        continue
+                    }
+                    $Output = Set-AzureStorageBlobContent @params -File $Localfile -Blob $Filename -ErrorAction Stop -Force
+                    if($Output.Name -notlike $Filename)
+                    {
+                        Throw "Set-AzureStorageBlobContent output seems off:`n$($Output | Format-List | Out-String)"
+                    }
                 }
                 Catch
                 {
                     Write-Error $_
-                    Write-Error "Failed to generate storage context for storage account '$StorageAccountName' in Resource Group '$ResourceGroup' for VM '$VM'"
+                    Write-Error "Failed to generate or upload local script for VM '$VM' in Resource Group '$ResourceGroup'"
                     continue
                 }
-            }
-        
-            Try
-            {
-                $Script = $ScriptBlock.ToString()
-                $LocalFile = [System.IO.Path]::GetTempFileName()
-                Start-Sleep -Milliseconds 300
-                Set-Content $LocalFile -Value $Script -ErrorAction Stop
-            
-                $params = @{
-                    Container = $StorageContainer
-                    Context = $StorageContext
-                }
 
-                $Existing = $Null
-                $Existing = @( Get-AzureStorageBlob @params -ErrorAction Stop )
-
-                if($Existing.Name -contains $Filename -and -not $ForceBlob)
+                # We have a script in place, set up an extension!
+                Write-Verbose "Adding CustomScriptExtension to VM '$VM' in resource group '$ResourceGroup'"
+                Try
                 {
-                    Write-Warning "Found blob '$FileName' in container '$StorageContainer'.`n Use -ForceBlob or -Force to overwrite this"
+                    $Output = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $ResourceGroup `
+                                                                 -VMName $VM `
+                                                                 -Location $AzureRmVM.Location `
+                                                                 -FileName $Filename `
+                                                                 -ContainerName $StorageContainer `
+                                                                 -StorageAccountName $StorageAccountName `
+                                                                 -StorageAccountKey $StorageAccountKey `
+                                                                 -Name $ExtensionName `
+                                                                 -TypeHandlerVersion 1.1 `
+                                                                 -ErrorAction Stop
+
+                    if($Output.StatusCode -notlike 'OK')
+                    {
+                        Throw "Set-AzureRmVMCustomScriptExtension output seems off:`n$($Output | Format-List | Out-String)"
+                    }
+                }
+                Catch
+                {
+                    Write-Error $_
+                    Write-Error "Failed to set CustomScriptExtension for VM '$VM' in resource group $ResourceGroup"
                     continue
                 }
-                $Output = Set-AzureStorageBlobContent @params -File $Localfile -Blob $Filename -ErrorAction Stop -Force
-                if($Output.Name -notlike $Filename)
+
+                # collect the output!
+                Try
                 {
-                    Write-Warning "Set-AzureStorageBlobContent output seems off:`n$($Output | Format-List | Out-String)"
+                    $AzureRmVmOutput = $null
+                    $AzureRmVmOutput = Get-AzureRmVM @CommonParams -Status -ErrorAction Stop
+                    $SubStatuses = ($AzureRmVmOutput.Extensions | Where {$_.name -like $ExtensionName} ).substatuses
                 }
-            }
-            Catch
-            {
-                Write-Error $_
-                Write-Error "Failed to generate or upload local script for VM '$VM' in Resource Group '$ResourceGroup'"
-                continue
-            }
+                Catch
+                {
+                    Write-Error $_
+                    Write-Error "Failed to retrieve script output data for $VM"
+                    continue
+                }
 
-            # We have a script in place, set up an extension!
-            Write-Verbose "Adding CustomScriptExtension to VM '$VM' in resource group '$ResourceGroup'"
-            $Output = Set-AzureRmVMCustomScriptExtension -ResourceGroupName $ResourceGroup `
-                                                         -VMName $VM `
-                                                         -Location $AzureRmVM.Location `
-                                                         -FileName $Filename `
-                                                         -ContainerName $StorageContainer `
-                                                         -StorageAccountName $StorageAccountName `
-                                                         -StorageAccountKey $StorageAccountKey `
-                                                         -Name $ExtensionName `
-                                                         -TypeHandlerVersion 1.1
+                $Output = [ordered]@{
+                    ResourceGroupName = $ResourceGroup
+                    VMName = $VM
+                    Substatuses = $SubStatuses
+                }
 
-            if($Output.StatusCode -notlike 'OK')
-            {
-                Write-Warning "Set-AzureRmVMCustomScriptExtension output seems off:`n$($Output | Format-List | Out-String)"
-            }
+                foreach($Substatus in $SubStatuses)
+                {
+                    $ThisCode = $Substatus.Code -replace 'ComponentStatus/', '' -replace '/', '_'
+                    $Output.add($ThisCode, $Substatus.Message)
+                }
 
-            # collect the output!
-            Try
-            {
-                $AzureRmVmOutput = $null
-                $AzureRmVmOutput = Get-AzureRmVM @CommonParams -Status -ErrorAction Stop
-                $SubStatuses = ($AzureRmVmOutput.Extensions | Where {$_.name -like $ExtensionName} ).substatuses
+                [pscustomobject]$Output
             }
-            Catch
-            {
-                Write-Error $_
-                Write-Error "Failed to retrieve script output data for $VM"
-                continue
-            }
-
-            $Output = [ordered]@{
-                ResourceGroupName = $ResourceGroup
-                VMName = $VM
-                Substatuses = $SubStatuses
-            }
-
-            foreach($Substatus in $SubStatuses)
-            {
-                $ThisCode = $Substatus.Code -replace 'ComponentStatus/', '' -replace '/', '_'
-                $Output.add($ThisCode, $Substatus.Message)
-            }
-
-            [pscustomobject]$Output
         }
     }
 }
