@@ -68,6 +68,12 @@ Task Build -Depends Test {
 
     # Load the module, read the exported functions, update the psd1 FunctionsToExport
     Set-ModuleFunctions
+
+    if(-not $ENV:BHPSModulePath)
+    {
+        Get-Item ENV:BH*
+        Throw 'BuildHelpers fail!'
+    }
 }
 
 Task Deploy -Depends Build {
@@ -76,7 +82,6 @@ Task Deploy -Depends Build {
     $Params = @{
         Path = $ProjectRoot
         Force = $true
-        Recurse = $false # We keep psdeploy artifacts, avoid deploying those : )
     }
     Invoke-PSDeploy @Verbose @Params
 }
