@@ -17,4 +17,4 @@ build: false
 
 #Kick off the CI/CD pipeline
 test_script:
-  - ps: . .\.build\0_build.ps1
+  - ps: . .\.build\0.build.ps1
