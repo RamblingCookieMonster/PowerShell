@@ -157,6 +157,7 @@
                                              - Added ErrorAction SilentlyContinue handling to Fill method
         v1.6.0                               - Added SQLConnection parameter and handling.  Is there a more efficient way to handle the parameter sets?
                                              - Fixed SQLConnection handling so that it is not closed (we now only close connections we create)
+        v1.6.1       - Shiyang Qiu           - Fixed the verbose option and SQL error handling conflict 
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
@@ -448,7 +449,7 @@
             #Following EventHandler is used for PRINT and RAISERROR T-SQL statements. Executed when -Verbose parameter specified by caller
             if ($PSBoundParameters.Verbose)
             {
-                $conn.FireInfoMessageEventOnUserErrors=$true
+                $conn.FireInfoMessageEventOnUserErrors=$false # Shiyang, $true will change the SQL exception to information
                 $handler = [System.Data.SqlClient.SqlInfoMessageEventHandler] { Write-Verbose "$($_)" }
                 $conn.add_InfoMessage($handler)
             }
@@ -478,13 +479,15 @@
                     $conn.Close()
                 }
             }
-            Catch
+            Catch [System.Data.SqlClient.SqlException] 
             {
                 $Err = $_
                 if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
                 {
                     $conn.Close()
                 }
+
+                if ($PSBoundParameters.Verbose) {Write-Verbose "SQL Error:  $Err"} #Shiyang, add the verbose output of exception
 
                 switch ($ErrorActionPreference.tostring())
                 {
