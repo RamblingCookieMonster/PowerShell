@@ -5,7 +5,7 @@
         Runs a T-SQL script.
 
     .DESCRIPTION
-        Runs a T-SQL script. Invoke-Sqlcmd2 only returns message output, such as the output of PRINT statements when -verbose parameter is specified.
+        Runs a T-SQL script. Invoke-Sqlcmd2 runs the whole scipt and only captures the first selected result set, such as the output of PRINT statements when -verbose parameter is specified.
         Paramaterized queries are supported.
 
         Help details below borrowed from Invoke-Sqlcmd
@@ -158,6 +158,8 @@
         v1.6.0                               - Added SQLConnection parameter and handling.  Is there a more efficient way to handle the parameter sets?
                                              - Fixed SQLConnection handling so that it is not closed (we now only close connections we create)
         v1.6.1       - Shiyang Qiu           - Fixed the verbose option and SQL error handling conflict 
+        v1.6.2       - Shiyang Qiu           - Fixed the .DESCRIPTION.
+                                             - Fixed the non SQL error handling and added Finally Block to close connection.
 
     .LINK
         https://github.com/RamblingCookieMonster/PowerShell
@@ -474,18 +476,12 @@
             Try
             {
                 [void]$da.fill($ds)
-                if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
-                {
-                    $conn.Close()
-                }
             }
-            Catch [System.Data.SqlClient.SqlException] 
+            Catch [System.Data.SqlClient.SqlException] # For SQL exception
             {
                 $Err = $_
-                if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
-                {
-                    $conn.Close()
-                }
+
+                Write-Verbose "Capture SQL Error"
 
                 if ($PSBoundParameters.Verbose) {Write-Verbose "SQL Error:  $Err"} #Shiyang, add the verbose output of exception
 
@@ -493,9 +489,33 @@
                 {
                     {'SilentlyContinue','Ignore' -contains $_} {}
                     'Stop' {     Throw $Err }
-                    'Continue' { Write-Error $Err}
-                    Default {    Write-Error $Err}
+                    'Continue' { Throw $Err}
+                    Default {    Throw $Err}
                 }
+            }
+            Catch # For other exception
+            {
+                Write-Verbose "Capture Other Error"  
+
+                $Err = $_
+
+                if ($PSBoundParameters.Verbose) {Write-Verbose "Other Error:  $Err"} 
+
+                switch ($ErrorActionPreference.tostring())
+                {
+                    {'SilentlyContinue','Ignore' -contains $_} {}
+                    'Stop' {     Throw $Err}
+                    'Continue' { Throw $Err}
+                    Default {    Throw $Err}
+                }
+            }
+            Finally
+            {
+                #Close the connection
+                if(-not $PSBoundParameters.ContainsKey('SQLConnection'))
+                {
+                    $conn.Close()
+                }               
             }
 
             if($AppendServerInstance)
