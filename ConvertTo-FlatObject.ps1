@@ -7,7 +7,7 @@
         Flatten an object.  This function will take an object, and flatten the properties using their full path into a single object with one layer of properties.
 
         You can use this to flatten XML, JSON, and other arbitrary objects.
-        
+
         This can simplify initial exploration and discovery of data returned by APIs, interfaces, and other technologies.
 
         NOTE:
@@ -16,7 +16,7 @@
 
     .PARAMETER InputObject
         Object to flatten
-    
+
     .PARAMETER Exclude
         Exclude any nodes in this list.  Accepts wildcards.
 
@@ -25,7 +25,7 @@
 
     .PARAMETER ExcludeDefault
         Exclude default properties for sub objects.  True by default.
-        
+
         This simplifies views of many objects (e.g. XML) but may exclude data for others (e.g. if flattening a process, ProcessThread properties will be excluded)
 
     .PARAMETER Include
@@ -36,7 +36,7 @@
 
     .PARAMETER Value
         Include only leaves with values like these arguments.  Accepts wildcards.
-    
+
     .PARAMETER MaxDepth
         Stop recursion at this depth.
 
@@ -83,7 +83,7 @@
 
         #Call the flatten command against this XML
             ConvertTo-FlatObject $object -Include Author, Title, Price
-    
+
             #Result is a flattened object with the full path to the node, using $object as the root.
             #Only leaf properties we specified are included (author,title,price)
 
@@ -119,7 +119,7 @@
                </book>
             </catalog>' |
                 ConvertTo-FlatObject -exclude price, title, id
-    
+
         Result is a flattened object with the full path to the node, using XML as the root.  Price and title are excluded.
 
             $Object.catalog                : catalog
@@ -167,7 +167,7 @@
     #>
     [cmdletbinding()]
     param(
-        
+
         [parameter( Mandatory = $True,
                     ValueFromPipeline = $True)]
         [PSObject[]]$InputObject,
@@ -237,7 +237,7 @@
                             $DefaultTypeProps = @()
                         }
                     }
-                    
+
                     @( $Exclude + $DefaultTypeProps ) | Select -Unique
             }
 
@@ -256,7 +256,7 @@
                     Write-Debug "Recurse Object called with PSBoundParameters:`n$($PSBoundParameters | Out-String)"
                     $Depth++
 
-                #Exclude default props if specified, and anything the user specified.                
+                #Exclude default props if specified, and anything the user specified.
                     $ExcludeProps = @( Get-Exclude $object )
 
                 #Get the children we care about, and their names
@@ -273,7 +273,7 @@
                     # Handle special characters...
                         if($ChildName -match '[^a-zA-Z0-9_]')
                         {
-                            $FriendlyChildName = "{$ChildName}"
+                            $FriendlyChildName = "'$ChildName'"
                         }
                         else
                         {
@@ -314,11 +314,11 @@
                     #Check for arrays
                         $IsArray = @($ChildValue).count -gt 1
                         $count = 0
-                        
+
                     #Set up the path to this node and the data...
                         $CurrentPath = @( $Path + $FriendlyChildName ) -join "."
 
-                    #Exclude default props if specified, and anything the user specified.                
+                    #Exclude default props if specified, and anything the user specified.
                         $ExcludeProps = @( Get-Exclude $ChildValue )
 
                     #Get the children's children we care about, and their names.  Also look for signs of a hashtable like type
@@ -333,13 +333,13 @@
                         }
                         Write-Debug "Found children's children $($ChildrensChildren | select -ExpandProperty Name | Out-String)"
 
-                    #If we aren't at max depth or a leaf...                   
+                    #If we aren't at max depth or a leaf...
                     if(
                         (@($ChildrensChildren).count -ne 0 -or $HashKeys) -and
                         $Depth -lt $MaxDepth
                     )
                     {
-                        #This handles hashtables.  But it won't recurse... 
+                        #This handles hashtables.  But it won't recurse...
                             if($HashKeys)
                             {
                                 Write-Verbose "Working on hashtable $CurrentPath"
@@ -347,7 +347,7 @@
                                 {
                                     Write-Verbose "Adding value from hashtable $CurrentPath['$key']"
                                     $Output | Add-Member -MemberType NoteProperty -name "$CurrentPath['$key']" -value $ChildValue["$key"]
-                                    $Output = Recurse-Object -Object $ChildValue["$key"] -Path "$CurrentPath['$key']" -Output $Output -depth $depth 
+                                    $Output = Recurse-Object -Object $ChildValue["$key"] -Path "$CurrentPath['$key']" -Output $Output -depth $depth
                                 }
                             }
                         #Sub children?  Recurse!
@@ -356,7 +356,7 @@
                                 if($IsArray)
                                 {
                                     foreach($item in @($ChildValue))
-                                    {  
+                                    {
                                         Write-Verbose "Recursing through array node '$CurrentPath'"
                                         $Output = Recurse-Object -Object $item -Path "$CurrentPath[$count]" -Output $Output -depth $depth
                                         $Count++
@@ -370,7 +370,7 @@
                             }
                         }
                     }
-                
+
                 $Output
             }
 
