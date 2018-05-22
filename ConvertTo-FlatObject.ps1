@@ -311,8 +311,14 @@
                             continue
                         }
 
-                    #Check for arrays
-                        $IsArray = @($ChildValue).count -gt 1
+                     #Check for arrays by checking object type (this is a fix for arrays with 1 object) otherwise check the count of objects
+                        if (($ChildValue.GetType()).basetype.Name -eq "Array") {
+                            $IsArray = $true
+                        }
+                        else {
+                            $IsArray = @($ChildValue).count -gt 1
+                        }
+
                         $count = 0
 
                     #Set up the path to this node and the data...
