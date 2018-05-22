@@ -64,7 +64,7 @@ Task Build -Depends Test {
     $PSD1 = $PSD1 -replace 'RootModule', 'ModuleToProcess'
 
     # We have a module, BuildHelpers will see it
-    Set-BuildEnvironment
+    Set-BuildEnvironment -Force
 
     # Load the module, read the exported functions, update the psd1 FunctionsToExport
     Set-ModuleFunctions
