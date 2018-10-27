@@ -9,7 +9,7 @@ function ConvertFrom-SID {
 .EXAMPLE
     ConvertFrom-SID S-1-5-21-2139171146-395215898-1246945465-2359
 .EXAMPLE 
-    'S-1-5-32-580' | ConverFrom-SID
+    'S-1-5-32-580' | ConvertFrom-SID
 .FUNCTIONALITY
     Active Directory
 .NOTES
@@ -22,6 +22,7 @@ function ConvertFrom-SID {
     )
 
     Begin{
+
         #well known SID to name map
         $wellKnownSIDs = @{
             'S-1-0' = 'Null Authority'
@@ -58,6 +59,24 @@ function ConvertFrom-SID {
             'S-1-5-18' = 'Local System'
             'S-1-5-19' = 'NT Authority'
             'S-1-5-20' = 'NT Authority'
+            'S-1-5-21-500' = 'Administrator'
+            'S-1-5-21-501' = 'Guest'
+            'S-1-5-21-502' = 'KRBTGT'
+            'S-1-5-21-512' = 'Domain Admins'
+            'S-1-5-21-513' = 'Domain Users'
+            'S-1-5-21-514' = 'Domain Guests'
+            'S-1-5-21-515' = 'Domain Computers'
+            'S-1-5-21-516' = 'Domain Controllers'
+            'S-1-5-21-517' = 'Cert Publishers'            
+            'S-1-5-21-518' = 'Schema Admins'
+            'S-1-5-21-519' = 'Enterprise Admins'
+            'S-1-5-21-520' = 'Group Policy Creator Owners'
+            'S-1-5-21-522' = 'Cloneable Domain Controllers'
+            'S-1-5-21-526' = 'Key Admins'
+            'S-1-5-21-527' = 'Enterprise Key Admins'
+            'S-1-5-21-553' = 'RAS and IAS Servers'
+            'S-1-5-21-571' = 'Allowed RODC Password Replication Group'
+            'S-1-5-21-572' = 'Denied RODC Password Replication Group'
             'S-1-5-32-544' = 'Administrators'
             'S-1-5-32-545' = 'Users'
             'S-1-5-32-546' = 'Guests'
@@ -105,7 +124,13 @@ function ConvertFrom-SID {
 
         #loop through provided SIDs
         foreach($id in $sid){
-            
+
+            #Check for domain contextual SID's
+            if($id.Remove(8) -eq "S-1-5-21"){
+                $suffix = $id.Substring($id.Length - 4)
+                $id = $id.Remove(8) + $suffix
+            }
+
             #Map name to well known sid.  If this fails, use .net to get the account
             if($name = $wellKnownSIDs[$id]){ }
             else{
@@ -123,9 +148,9 @@ function ConvertFrom-SID {
 
             #Display the results
             New-Object -TypeName PSObject -Property @{
-                SID = $id
+                SID = $id;
                 Name = $name
-            } | Select SID, Name
+            } | Select-Object SID, Name
 
         }
     }
