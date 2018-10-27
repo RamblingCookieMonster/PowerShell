@@ -124,17 +124,26 @@ function ConvertFrom-SID {
 
         #loop through provided SIDs
         foreach($id in $sid){
-
+            $fullsid = $id
             #Check for domain contextual SID's
-            if($id.Remove(8) -eq "S-1-5-21"){
-                $suffix = $id.Substring($id.Length - 4)
-                $id = $id.Remove(8) + $suffix
+            try {
+                $IsDomain = $false
+                if($id.Remove(8) -eq "S-1-5-21"){
+                    $IsDomain = $true
+                    $suffix = $id.Substring($id.Length - 4)
+                    $id = $id.Remove(8) + $suffix
+                }
+            }
+            catch {
+                # String size issues
             }
 
             #Map name to well known sid.  If this fails, use .net to get the account
             if($name = $wellKnownSIDs[$id]){ }
             else{
-                
+                if($IsDomain){
+                    $id = $fullsid
+                }
                 #Try to translate the SID to an account
                 Try{
                     $objSID = New-Object System.Security.Principal.SecurityIdentifier($id)
@@ -148,7 +157,7 @@ function ConvertFrom-SID {
 
             #Display the results
             New-Object -TypeName PSObject -Property @{
-                SID = $id;
+                SID = $fullsid
                 Name = $name
             } | Select-Object SID, Name
 
